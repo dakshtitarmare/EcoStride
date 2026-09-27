@@ -59,7 +59,9 @@ ecostride*.json
 *.pem
 *.key
 *.p12
-
+backend/Keys/eco-stride2026.json
+backend/Keys/.env
+.env
 # ===============================
 # Data cache
 # ===============================
