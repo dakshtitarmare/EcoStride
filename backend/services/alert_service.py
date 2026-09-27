@@ -58,6 +58,72 @@ class AQIAlertService:
         conn.commit()
         conn.close()
         
+    def _dispatch_email(self, to_email, subject, html_content):
+        """
+        Robust email dispatcher that attempts TLS (587) and SSL (465) with Gmail SMTP,
+        strips password spaces, and logs email locally if SMTP fails.
+        Returns: (success: bool, status_msg: str)
+        """
+        # Save to local log file first so no email is lost
+        try:
+            log_dir = os.path.join(os.path.dirname(__file__), '..', 'local_storage')
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, 'sent_emails.json')
+            import json
+            existing_logs = []
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        existing_logs = json.load(f)
+                except Exception:
+                    existing_logs = []
+            existing_logs.append({
+                "to": to_email,
+                "subject": subject,
+                "timestamp": datetime.datetime.now().isoformat(),
+            })
+            with open(log_file, 'w', encoding='utf-8') as f:
+                json.dump(existing_logs, f, indent=2)
+        except Exception as log_e:
+            print(f"Failed to log email locally: {log_e}")
+
+        if not SMTP_EMAIL or not SMTP_APP_PASSWORD:
+            msg = "SMTP credentials missing in .env file"
+            print(msg)
+            return False, msg
+
+        clean_pass = SMTP_APP_PASSWORD.replace(" ", "").strip()
+        msg_obj = MIMEMultipart('alternative')
+        msg_obj['Subject'] = subject
+        msg_obj['From']    = SMTP_EMAIL
+        msg_obj['To']      = to_email
+        msg_obj.attach(MIMEText(html_content, 'html'))
+
+        # Strategy 1: Try TLS on port 587
+        try:
+            server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
+            server.starttls()
+            server.login(SMTP_EMAIL, clean_pass)
+            server.send_message(msg_obj)
+            server.quit()
+            print(f"Email sent successfully to {to_email} via TLS 587")
+            return True, "Email sent successfully"
+        except Exception as e1:
+            print(f"TLS 587 email dispatch failed: {e1}")
+
+        # Strategy 2: Try SSL on port 465
+        try:
+            server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
+            server.login(SMTP_EMAIL, clean_pass)
+            server.send_message(msg_obj)
+            server.quit()
+            print(f"Email sent successfully to {to_email} via SSL 465")
+            return True, "Email sent successfully"
+        except Exception as e2:
+            err_msg = f"SMTP Authentication Error: {str(e2)}"
+            print(f"SSL 465 email dispatch failed: {e2}")
+            return False, err_msg
+
     def subscribe(self, contact, contact_type, city, lat, lon, threshold=100):
         # Remove existing subscription for this contact
         self.unsubscribe(contact)
@@ -72,9 +138,12 @@ class AQIAlertService:
         conn.commit()
         conn.close()
 
+        email_sent = False
+        email_status = ""
+
         # Send confirmation immediately on subscribe
         if contact_type == 'email':
-            self._send_subscription_confirmation(contact, city, threshold)
+            email_sent, email_status = self._send_subscription_confirmation(contact, city, threshold)
         elif contact_type == 'sms':
             self._send_sms_confirmation(contact, city, threshold)
 
@@ -89,7 +158,10 @@ class AQIAlertService:
             if current_aqi is not None and current_aqi > threshold:
                 alert_triggered = True
                 if contact_type == 'email':
-                    self.send_email_alert(contact, city, current_aqi, "")
+                    al_sent, al_status = self.send_email_alert(contact, city, current_aqi, "")
+                    email_sent = email_sent or al_sent
+                    if not email_sent:
+                        email_status = al_status
                 else:
                     self.send_sms_alert(contact, city, current_aqi, "")
                 
@@ -112,15 +184,13 @@ class AQIAlertService:
             "current_aqi": current_aqi,
             "alert_triggered": alert_triggered,
             "threshold": threshold,
-            "city": city
+            "city": city,
+            "email_sent": email_sent,
+            "email_status": email_status
         }
 
     def _send_subscription_confirmation(self, email_addr, city, threshold):
         """Send a confirmation email immediately when user subscribes."""
-        if not SMTP_EMAIL or not SMTP_APP_PASSWORD:
-            print("Confirmation email not sent: SMTP credentials missing")
-            return
-
         html = f"""
         <html><body style="font-family:Arial;background:#0d1117;color:#fff;padding:20px">
           <div style="max-width:600px;margin:auto;background:#161b22;border-radius:16px;padding:24px;border:1px solid #30363d">
@@ -157,7 +227,7 @@ class AQIAlertService:
               and safe routing suggestions instantly.
             </p>
 
-            <a href="https://noninfallibly-extraversive-fairy.ngrok-free.dev" 
+            <a href="http://localhost:5173" 
                style="background:#00e5a0;color:#080d0f;padding:12px 24px;border-radius:8px;
                       text-decoration:none;display:inline-block;font-weight:bold;font-size:0.9rem">
               🗺️ View Live AQI Dashboard
@@ -166,26 +236,13 @@ class AQIAlertService:
             <hr style="border:none;border-top:1px solid #30363d;margin:24px 0">
             <p style="color:#3d5a64;font-size:0.75rem;text-align:center">
               EcoStride — Environmental Health & Safe Routing Platform<br>
-              To unsubscribe, visit the Community page and enter your email.
+              To unsubscribe, visit your account settings on EcoStride.
             </p>
           </div>
         </body></html>"""
 
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"✅ EcoStride Alert Subscription Confirmed — {city}"
-        msg['From']    = SMTP_EMAIL
-        msg['To']      = email_addr
-        msg.attach(MIMEText(html, 'html'))
-
-        try:
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            print(f"Confirmation email sent to {email_addr}")
-        except Exception as e:
-            print(f"Failed to send confirmation email to {email_addr}: {e}")
+        subject = f"✅ EcoStride Alert Subscription Confirmed — {city}"
+        return self._dispatch_email(email_addr, subject, html)
 
     def _send_sms_confirmation(self, phone, city, threshold):
         """Send confirmation SMS immediately when user subscribes."""
@@ -219,10 +276,6 @@ class AQIAlertService:
         conn.close()
         
     def send_email_alert(self, email_addr, city, aqi, message):
-        if not SMTP_EMAIL or not SMTP_APP_PASSWORD:
-            print("Email not sent: SMTP credentials missing")
-            return
-            
         html = f"""
         <html><body style="font-family:Arial;background:#0d1117;color:#fff;padding:20px">
           <div style="max-width:600px;margin:auto;background:#161b22;border-radius:16px;padding:24px;border:1px solid #30363d">
@@ -265,26 +318,13 @@ class AQIAlertService:
             <hr style="border:none;border-top:1px solid #30363d;margin:24px 0">
             <p style="color:#3d5a64;font-size:0.75rem;text-align:center">
               EcoStride — Environmental Health & Safe Routing Platform<br>
-              To unsubscribe, visit the Community page and enter your email.
+              To unsubscribe, visit your account settings on EcoStride.
             </p>
           </div>
         </body></html>"""
         
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"⚠️ AQI Alert: {city} is at {aqi} — Stay Safe"
-        msg['From']    = SMTP_EMAIL
-        msg['To']      = email_addr
-        msg.attach(MIMEText(html, 'html'))
-        
-        try:
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            print(f"Alert email sent to {email_addr}")
-        except Exception as e:
-            print(f"Failed to send email to {email_addr}: {e}")
+        subject = f"⚠️ AQI Alert: {city} is at {aqi} — Stay Safe"
+        return self._dispatch_email(email_addr, subject, html)
 
     def send_authority_report(self, report_type, description, city, lat, lon):
         if not SMTP_EMAIL or not SMTP_APP_PASSWORD or not AUTHORITY_EMAIL:
