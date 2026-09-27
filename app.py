@@ -2,6 +2,10 @@ from flask import Flask, jsonify, request, render_template, send_file
 from flask_cors import CORS
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Ensure the project root is in sys.path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -79,7 +83,7 @@ def policy_page():
 # --- Forecast API Endpoints ---
 @app.route('/api/forecast/current', methods=['GET'])
 def get_current_aqi():
-    city = request.args.get('city', 'Amravati')
+    city = request.args.get('city', 'Pune')
     try:
         lat = float(request.args.get('lat')) if request.args.get('lat') else None
         lon = float(request.args.get('lon')) if request.args.get('lon') else None
@@ -101,9 +105,9 @@ def get_current_aqi():
                 lat = float(geo_data[0]['lat'])
                 lon = float(geo_data[0]['lon'])
             else:
-                lat, lon = 20.9343, 77.7489
+                lat, lon = 18.5204, 73.8567
         except:
-            lat, lon = 20.9343, 77.7489
+            lat, lon = 18.5204, 73.8567
 
     current = forecaster.get_current(location=city, lat=lat, lon=lon)
     # Attach lat/lon so Compare.jsx can forward them to predict endpoint
@@ -115,12 +119,12 @@ def get_current_aqi():
 def predict_aqi():
     data = request.json or {}
     try:
-        lat = float(data.get('lat')) if data.get('lat') is not None else 20.9343
-        lon = float(data.get('lon')) if data.get('lon') is not None else 77.7489
+        lat = float(data.get('lat')) if data.get('lat') is not None else 18.5204
+        lon = float(data.get('lon')) if data.get('lon') is not None else 73.8567
     except:
-        lat, lon = 20.9343, 77.7489
-    city = data.get('city', 'Amravati')
-    predictions = forecaster.predict_72h(location=city)
+        lat, lon = 18.5204, 73.8567
+    city = data.get('city', 'Pune')
+    predictions = forecaster.predict_72h(location=city, lat=lat, lon=lon)
     return jsonify({"status": "success", "data": predictions})
 
 # --- Routing API Endpoints ---
@@ -140,11 +144,11 @@ def calculate_route():
         
     mode  = data.get('mode', 'driving')
     try:
-        lat = float(data.get('lat')) if data.get('lat') else 20.9343
-        lon = float(data.get('lon')) if data.get('lon') else 77.7489
+        lat = float(data.get('lat')) if data.get('lat') else 18.5204
+        lon = float(data.get('lon')) if data.get('lon') else 73.8567
     except:
-        lat, lon = 20.9343, 77.7489
-    city = data.get('city')
+        lat, lon = 18.5204, 73.8567
+    city = data.get('city', 'Pune')
     
     if not start_name or not end_name:
         return jsonify({"status": "error", "message": "Start and end locations are required"}), 400
@@ -161,9 +165,9 @@ def calculate_route():
 # --- Source Detection Endpoints (Now Dynamic) ---
 @app.route('/api/source/detect', methods=['GET'])
 def detect_sources():
-    lat = float(request.args.get('lat', 20.9343))
-    lon = float(request.args.get('lon', 77.7489))
-    city = request.args.get('city', 'Amravati')
+    lat = float(request.args.get('lat', 18.5204))
+    lon = float(request.args.get('lon', 73.8567))
+    city = request.args.get('city', 'Pune')
     sources = simulator.detect_city_industries(lat, lon, city)
     return jsonify({"status": "success", "detected_sources": sources})
 
@@ -171,9 +175,9 @@ def detect_sources():
 @app.route('/api/map/pins', methods=['GET'])
 def get_map_pins():
     """Returns live AQI data for dynamic map pins."""
-    lat = float(request.args.get('lat', 20.9343))
-    lon = float(request.args.get('lon', 77.7489))
-    city = request.args.get('city', 'Amravati')
+    lat = float(request.args.get('lat', 18.5204))
+    lon = float(request.args.get('lon', 73.8567))
+    city = request.args.get('city', 'Pune')
     pins = forecaster.get_colony_pins(lat, lon, city)
     return jsonify({"status": "success", "pins": pins})
 
@@ -182,9 +186,9 @@ def get_map_pins():
 def get_advisory():
     data    = request.json or {}
     profile = data.get('profile', {})
-    lat = float(profile.get('lat', 20.9343))
-    lon = float(profile.get('lon', 77.7489))
-    location = profile.get('location', 'Amravati')
+    lat = float(profile.get('lat', 18.5204))
+    lon = float(profile.get('lon', 73.8567))
+    location = profile.get('location', 'Pune')
 
     current   = forecaster.get_current(location=location, lat=lat, lon=lon)
     aqi_value = current.get('aqi', 100)
@@ -204,10 +208,9 @@ def get_advisory():
 # --- Policy Simulation Endpoints ---
 @app.route('/api/policy/scenarios', methods=['GET'])
 def get_scenarios():
-    lat = float(request.args.get('lat', 20.9343))
-    lon = float(request.args.get('lon', 77.7489))
-    city = request.args.get('city', 'Amravati')
-    # get_available_scenarios will now return dynamic policies
+    lat = float(request.args.get('lat', 18.5204))
+    lon = float(request.args.get('lon', 73.8567))
+    city = request.args.get('city', 'Pune')
     scenarios = simulator.generate_policies_for_city(lat, lon, city)
     return jsonify({"status": "success", "scenarios": scenarios})
 
@@ -215,9 +218,9 @@ def get_scenarios():
 def simulate_policy():
     data             = request.json or {}
     selected_policies = data.get('policies', [])
-    lat = float(data.get('lat', 20.9343))
-    lon = float(data.get('lon', 77.7489))
-    city = data.get('city', 'Amravati')
+    lat = float(data.get('lat', 18.5204))
+    lon = float(data.get('lon', 73.8567))
+    city = data.get('city', 'Pune')
 
     # Live current data as the simulation baseline
     current_state        = forecaster.get_current(location=city, lat=lat, lon=lon)
@@ -1164,4 +1167,4 @@ def delete_admin_report(report_id):
 if __name__ == '__main__':
     from config import PORT, HOST, DEBUG
     print(f"Starting Team-X project on http://{HOST}:{PORT}")
-    app.run(debug=DEBUG, host=HOST, port=PORT)
+    app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)

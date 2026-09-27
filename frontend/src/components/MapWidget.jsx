@@ -6,6 +6,7 @@ import {
   Popup,
   useMap,
   CircleMarker,
+  Circle,
   Polyline,
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -99,15 +100,21 @@ const createAqiIcon = (aqi) => {
   });
 };
 
-// Component to center on a point — only fires ONCE on initial mount.
-// After that the user can pan freely without being snapped back.
+// Component to center on a point — pans/flies to new coordinates whenever they change
 const MapController = ({ center }) => {
   const map = useMap();
-  const didInit = useRef(false);
+  const lastCenter = useRef(null);
+
   useEffect(() => {
-    if (!didInit.current) {
-      map.setView(center, 13, { animate: true });
-      didInit.current = true;
+    if (!center || typeof center[0] !== 'number' || typeof center[1] !== 'number') return;
+    const isDifferent =
+      !lastCenter.current ||
+      Math.abs(lastCenter.current[0] - center[0]) > 0.001 ||
+      Math.abs(lastCenter.current[1] - center[1]) > 0.001;
+
+    if (isDifferent) {
+      map.flyTo(center, 13, { duration: 1.2 });
+      lastCenter.current = center;
     }
   }, [center, map]);
   return null;
@@ -152,20 +159,86 @@ const FitRoute = ({ route, allRoutes }) => {
   return null;
 };
 
-// Heatmap Layer component
+// Heatmap Layer component — renders both gradient heat canvas and glowing atmospheric zone rings
 const HeatmapLayer = ({ points }) => {
   const map = useMap();
+
   useEffect(() => {
     if (!points || points.length === 0) return;
-    const heatPoints = points.map((p) => [p.lat, p.lon, p.aqi / 200]);
-    const layer = L.heatLayer(heatPoints, {
-      radius: 35,
-      blur: 20,
-      maxZoom: 14,
-    }).addTo(map);
-    return () => map.removeLayer(layer);
+    if (typeof L.heatLayer === "function") {
+      const heatPoints = points.map((p) => [
+        p.lat,
+        p.lon,
+        Math.min(Math.max((p.aqi || 50) / 200, 0.25), 1.0)
+      ]);
+      const layer = L.heatLayer(heatPoints, {
+        radius: 45,
+        blur: 28,
+        maxZoom: 15,
+        gradient: {
+          0.15: "#00e5a0", // Good (Green)
+          0.35: "#f5c542", // Moderate (Yellow)
+          0.55: "#ff8c42", // Sensitive (Orange)
+          0.75: "#ff4f6b", // Unhealthy (Red)
+          1.0:  "#7b241c"  // Hazardous (Dark red)
+        }
+      }).addTo(map);
+      return () => {
+        try {
+          map.removeLayer(layer);
+        } catch {
+          // ignore
+        }
+      };
+    }
   }, [points, map]);
-  return null;
+
+  return (
+    <>
+      {points.map((p) => {
+        const color = aqiColor(p.aqi);
+        const radius = p.aqi > 150 ? 900 : p.aqi > 100 ? 750 : 600;
+        return (
+          <React.Fragment key={`heat-zone-${p.id || p.name}-${p.lat}`}>
+            <Circle
+              center={[p.lat, p.lon]}
+              radius={radius}
+              pathOptions={{
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.32,
+                weight: 1.5,
+              }}
+            >
+              <Popup>
+                <div style={{ color: "#111" }}>
+                  <h4 style={{ margin: "0 0 4px 0" }}>🔥 {p.name}</h4>
+                  <div
+                    style={{
+                      background: color,
+                      padding: "3px 8px",
+                      borderRadius: "10px",
+                      color: "#fff",
+                      fontWeight: "bold",
+                      display: "inline-block",
+                      marginBottom: "6px"
+                    }}
+                  >
+                    AQI {p.aqi}
+                  </div>
+                  <div>PM2.5: {p.pm2_5} | PM10: {p.pm10}</div>
+                  <div>NO₂: {p.no2} | O₃: {p.o3}</div>
+                  <div style={{ fontSize: "0.75rem", color: "#666", marginTop: "4px" }}>
+                    📍 {p.category || "Zone"}
+                  </div>
+                </div>
+              </Popup>
+            </Circle>
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
 };
 
 // Force Leaflet to recalculate its viewport size to fix blank space renders
@@ -265,8 +338,8 @@ const MapWidget = ({
       >
         <MapResizer />
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution="&copy; CARTO"
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         <MapController center={[centerLat, centerLon]} />
         <FitRoute

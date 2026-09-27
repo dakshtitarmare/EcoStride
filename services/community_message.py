@@ -27,12 +27,15 @@ class CommunityMessageService:
     def _should_use_fallback(self) -> bool:
         """Determine if we should use local fallback storage"""
         try:
-            # Try to check if Firebase is initialized and accessible
-            test_ref = rtdb.reference('.info/connected')
+            if not firebase_admin._apps:
+                from auth import initialize_firebase
+                initialize_firebase()
+            # Test if Firebase is initialized and accessible
+            test_ref = rtdb.reference('communityMessages')
             test_ref.get()
             return False
-        except:
-            # If Firebase fails, use local fallback
+        except Exception as e:
+            print(f"Firebase not available for Community Messages, falling back to local storage: {e}")
             return True
     
     def _get_local_messages_file(self) -> str:

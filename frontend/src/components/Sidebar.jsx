@@ -43,12 +43,13 @@ const Sidebar = () => {
   const handleSearch = async (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    if (query.length > 2) {
+    if (query.trim().length > 1) {
       try {
         const res = await axios.get(
-          `https://nominatim.openstreetmap.org/search?q=${query}, India&format=json&limit=5`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim())}, India&format=json&limit=6`,
+          { headers: { "Accept-Language": "en" } }
         );
-        setSearchResults(res.data);
+        setSearchResults(res.data || []);
       } catch (err) {
         console.error(err);
       }
@@ -64,6 +65,27 @@ const Sidebar = () => {
     setManualLocation(name, "India", lat, lon);
     setSearchQuery("");
     setSearchResults([]);
+  };
+
+  const handleKeyDown = async (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchResults.length > 0) {
+        selectCity(searchResults[0]);
+      } else if (searchQuery.trim().length > 1) {
+        try {
+          const res = await axios.get(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery.trim())}, India&format=json&limit=1`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          if (res.data && res.data.length > 0) {
+            selectCity(res.data[0]);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
   };
 
   const handleSubscribe = async (e) => {
@@ -173,6 +195,7 @@ const Sidebar = () => {
             placeholder="Search city…"
             value={searchQuery}
             onChange={handleSearch}
+            onKeyDown={handleKeyDown}
             className="input"
             style={{
               paddingLeft: "32px",

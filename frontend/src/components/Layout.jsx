@@ -37,6 +37,27 @@ const LayoutContent = () => {
     setSearchResults([]);
   };
 
+  const handleKeyDown = async (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchResults.length > 0) {
+        selectCity(searchResults[0]);
+      } else if (searchQuery.trim().length > 1) {
+        try {
+          const res = await axios.get(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery.trim())}, India&format=json&limit=1`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          if (res.data && res.data.length > 0) {
+            selectCity(res.data[0]);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }
+  };
+
   return (
     <div className="app-container">
       <Sidebar />
@@ -50,6 +71,7 @@ const LayoutContent = () => {
               placeholder="Search city..."
               value={searchQuery}
               onChange={handleSearch}
+              onKeyDown={handleKeyDown}
             />
             <button
               type="button"

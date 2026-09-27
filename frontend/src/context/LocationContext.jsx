@@ -7,22 +7,29 @@ export const LocationProvider = ({ children }) => {
 
   const [showPrompt, setShowPrompt] = useState(false);
 
+  const DEFAULT_PUNE = {
+    city: 'Pune',
+    state: 'Maharashtra',
+    lat: 18.5204,
+    lon: 73.8567,
+    loading: false
+  };
+
   const [location, setLocation] = useState({
-    city: localStorage.getItem('userCity') || '',
-    state: localStorage.getItem('userState') || '',
-    lat: parseFloat(localStorage.getItem('userLat')) || null,
-    lon: parseFloat(localStorage.getItem('userLon')) || null,
-    loading: true
+    city: localStorage.getItem('userCity') || DEFAULT_PUNE.city,
+    state: localStorage.getItem('userState') || DEFAULT_PUNE.state,
+    lat: parseFloat(localStorage.getItem('userLat')) || DEFAULT_PUNE.lat,
+    lon: parseFloat(localStorage.getItem('userLon')) || DEFAULT_PUNE.lon,
+    loading: false
   });
 
   const getGPS = () => {
-
     setShowPrompt(false);
 
     const geoOptions = {
       enableHighAccuracy: true,
-      timeout: 20000,
-      maximumAge: 0
+      timeout: 10000,
+      maximumAge: 30000
     };
 
     if (!navigator.geolocation) {
@@ -32,31 +39,24 @@ export const LocationProvider = ({ children }) => {
     }
 
     navigator.geolocation.getCurrentPosition(async (pos) => {
-
       const { latitude, longitude } = pos.coords;
 
       try {
-
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=18&addressdetails=1`,
-          { headers: { 'Accept-Language': 'en' } }
+          { headers: { 'Accept-Language': 'en', 'User-Agent': 'EcoStride/1.0' } }
         );
 
         const geo = await res.json();
-
-        console.log("Full Address:", geo.address);
-
         const addr = geo.address || {};
 
         // Detect the most specific location available
         const city =
-          addr.village ||
-          addr.hamlet ||
-          addr.locality ||
-          addr.suburb ||
-          addr.neighbourhood ||
-          addr.town ||
           addr.city ||
+          addr.town ||
+          addr.suburb ||
+          addr.locality ||
+          addr.village ||
           addr.county ||
           geo.display_name?.split(',')[0] ||
           "Current Location";
@@ -72,16 +72,13 @@ export const LocationProvider = ({ children }) => {
         };
 
         setLocation(newLocation);
-
         localStorage.setItem('userCity', city);
         localStorage.setItem('userState', state);
         localStorage.setItem('userLat', latitude);
         localStorage.setItem('userLon', longitude);
 
       } catch (e) {
-
         console.error("Reverse geocoding failed:", e);
-
         setLocation({
           city: "Current Location",
           state: "",
@@ -89,39 +86,35 @@ export const LocationProvider = ({ children }) => {
           lon: longitude,
           loading: false
         });
-
       }
 
     }, (err) => {
-
-      console.warn("Geolocation Error:", err.message);
-
-      setLocation(prev => ({ ...prev, loading: false }));
-
-      setShowPrompt(true);
-
+      console.warn("Geolocation notice:", err.message);
+      // Keep current location (defaults to Pune)
+      setLocation(prev => ({
+        city: prev.city || DEFAULT_PUNE.city,
+        state: prev.state || DEFAULT_PUNE.state,
+        lat: prev.lat || DEFAULT_PUNE.lat,
+        lon: prev.lon || DEFAULT_PUNE.lon,
+        loading: false
+      }));
     }, geoOptions);
-
   };
 
   useEffect(() => {
-
-    // Always try to get GPS when app loads
-    getGPS();
-
+    // Only attempt GPS on initial load if user hasn't explicitly set a custom city in localStorage
+    if (!localStorage.getItem('userCity')) {
+      getGPS();
+    }
   }, []);
 
   const setManualLocation = (city, state, lat, lon) => {
-
     const newLocation = { city, state, lat, lon, loading: false };
-
     setLocation(newLocation);
-
     localStorage.setItem('userCity', city);
     localStorage.setItem('userState', state);
     localStorage.setItem('userLat', lat);
     localStorage.setItem('userLon', lon);
-
   };
 
   return (

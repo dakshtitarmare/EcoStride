@@ -12,34 +12,76 @@ from datetime import datetime
 # Initialize Firebase Admin SDK
 def initialize_firebase():
     """Initialize Firebase Admin SDK"""
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+
     from config import FIREBASE_DATABASE_URL
+    import glob
     
-    # Try to get credentials from environment variable first
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 1. Try environment variable FIREBASE_CREDENTIALS (JSON string or file path)
     firebase_credentials = os.getenv('FIREBASE_CREDENTIALS')
-    
+    cred = None
+
     if firebase_credentials:
-        # Parse JSON from environment variable
-        creds_dict = json.loads(firebase_credentials)
-        cred = credentials.Certificate(creds_dict)
-    elif os.path.exists('eco-stride2026.json'):
-        # Fallback to local file
-        cred = credentials.Certificate('eco-stride2026.json')
-    else:
+        if os.path.exists(firebase_credentials):
+            cred = credentials.Certificate(firebase_credentials)
+        else:
+            try:
+                creds_dict = json.loads(firebase_credentials)
+                cred = credentials.Certificate(creds_dict)
+            except Exception:
+                pass
+
+    # 2. Check explicit service account files in project directory
+    if not cred:
+        known_files = [
+            os.path.join(base_dir, 'eco-stride2026-firebase-adminsdk-fbsvc-1f2810f333.json'),
+            os.path.join(base_dir, 'eco-stride2026.json'),
+        ]
+        # Also auto-discover any firebase-adminsdk json files
+        known_files.extend(glob.glob(os.path.join(base_dir, '*firebase-adminsdk*.json')))
+        known_files.extend(glob.glob(os.path.join(base_dir, 'eco-stride*.json')))
+
+        for candidate in set(known_files):
+            if os.path.exists(candidate):
+                try:
+                    cred = credentials.Certificate(candidate)
+                    break
+                except Exception as e:
+                    print(f"Warning: Found credentials file {candidate} but failed to load: {e}")
+
+    if not cred:
         raise FileNotFoundError(
             "Firebase credentials not found. "
-            "Please set FIREBASE_CREDENTIALS environment variable or provide eco-stride2026.json"
+            "Please provide eco-stride2026-firebase-adminsdk-fbsvc-1f2810f333.json or set FIREBASE_CREDENTIALS"
         )
     
     # Use database URL from config
-    if not FIREBASE_DATABASE_URL:
-        raise ValueError(
-            "FIREBASE_DATABASE_URL not configured. "
-            "Set it in config.py or via FIREBASE_DATABASE_URL environment variable"
-        )
+    db_url = FIREBASE_DATABASE_URL or 'https://eco-stride2026-default-rtdb.firebaseio.com'
     
-    firebase_admin.initialize_app(cred, {
-        'databaseURL': FIREBASE_DATABASE_URL
+    app = firebase_admin.initialize_app(cred, {
+        'databaseURL': db_url
     })
+    ensure_default_admin()
+    return app
+
+def ensure_default_admin():
+    """Ensure default admin credentials exist in RTDB if not present"""
+    try:
+        admin_ref = db.reference('admin')
+        if not admin_ref.get():
+            admin_data = {
+                'username': 'admin',
+                'password': 'securepassword',
+                'role': 'superadmin',
+                'created_at': datetime.now().isoformat()
+            }
+            admin_ref.child('admin1').set(admin_data)
+            db.reference('admins/admin1').set(admin_data)
+    except Exception as e:
+        print(f"Notice: Could not check/seed default admin: {e}")
 
 def verify_google_token(id_token):
     """

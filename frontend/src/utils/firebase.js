@@ -17,15 +17,15 @@ import {
   get
 } from "firebase/database";
 
-// Firebase config from .env
+// Firebase config from .env with fallback defaults matching eco-stride2026
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC9cER-OXpDP7uDp5dNgiDjwPG5gGk7YHI",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "eco-stride2026.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "eco-stride2026",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "eco-stride2026.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "697629931097",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:697629931097:web:4fdc0cfc907543f3666348",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://eco-stride2026-default-rtdb.firebaseio.com"
 };
 
 // Initialize Firebase
@@ -121,7 +121,12 @@ export const getAdmins = async () => {
     const adminsRef = ref(database, "admin");
     const snapshot = await get(adminsRef);
 
-    return snapshot.exists() ? snapshot.val() : null;
+    if (snapshot.exists()) return snapshot.val();
+
+    // Also check "admins" plural node if "admin" is empty
+    const adminsPluralRef = ref(database, "admins");
+    const snapshotPlural = await get(adminsPluralRef);
+    return snapshotPlural.exists() ? snapshotPlural.val() : null;
 
   } catch (error) {
     console.error("Error fetching admins:", error);

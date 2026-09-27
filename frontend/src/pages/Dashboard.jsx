@@ -347,39 +347,57 @@ const Dashboard = () => {
             dist {data?.distance_km ?? "—"} km · {data?.accuracy_level || ""}
           </div>
 
-          {/* Heatmap toggle — full width */}
-          <button
-            className={heatmapMode ? "btn-primary" : "btn-ghost"}
-            onClick={() => setHeatmapMode(!heatmapMode)}
-            style={{
-              width: "100%",
-              marginTop: 6,
-              fontSize: "0.75rem",
-              padding: "7px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-            }}
-          >
-            {heatmapMode ? (
-              "🔥 Heatmap"
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#34A853">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5z" />
-                </svg>
-                Pin View
-              </>
-            )}
-          </button>
+          {/* Map View Mode Switcher */}
+          <div style={{ display: "flex", gap: "6px", width: "100%", marginTop: 8 }}>
+            <button
+              type="button"
+              className={!heatmapMode ? "btn-primary" : "btn-ghost"}
+              onClick={() => setHeatmapMode(false)}
+              style={{
+                flex: 1,
+                fontSize: "0.75rem",
+                padding: "7px 4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                borderRadius: "8px",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={!heatmapMode ? "#fff" : "#34A853"}>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5z" />
+              </svg>
+              Pin View
+            </button>
+            <button
+              type="button"
+              className={heatmapMode ? "btn-primary" : "btn-ghost"}
+              onClick={() => setHeatmapMode(true)}
+              style={{
+                flex: 1,
+                fontSize: "0.75rem",
+                padding: "7px 4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                borderRadius: "8px",
+              }}
+            >
+              🔥 Heatmap
+            </button>
+          </div>
         </div>
 
         {/* Right: Colony map */}
         <div className="card">
-          <div className="map-card-header">
-            <span className="map-card-title">Colony Map</span>
-            <span className="map-card-badge">LIVE PINS</span>
+          <div className="map-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="map-card-title">{heatmapMode ? "Atmospheric Heatmap" : "Zone Monitoring Pins"}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span className="map-card-badge" style={{ background: heatmapMode ? "#ff4f6b" : "var(--accent-primary)", color: "#fff" }}>
+                {heatmapMode ? "🔥 HEATMAP ACTIVE" : "📍 LIVE PINS"}
+              </span>
+            </div>
           </div>
           <div className="map-container">
             <MapWidget

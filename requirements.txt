@@ -41,3 +41,6 @@ firebase-admin
 # But we'll use optional dependencies for better email handling:
 email-validator
 
+# PDF Generation
+reportlab
+

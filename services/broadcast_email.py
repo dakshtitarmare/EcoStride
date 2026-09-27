@@ -46,11 +46,8 @@ class EmergencyBroadcastService:
         self.sender_password = os.getenv('BROADCAST_PASSWORD')
         self.sender_name = os.getenv('BROADCAST_SENDER_NAME', 'EcoStride Admin')
         
-        if not self.sender_email or not self.sender_password:
-            raise ValueError(
-                "BROADCAST_EMAIL and BROADCAST_PASSWORD environment variables must be set. "
-                "See docstring for setup instructions."
-            )
+        # sender_email and sender_password are required for sending emails, but optional for preview
+        self.is_configured = bool(self.sender_email and self.sender_password)
     
     def get_all_user_emails(self) -> List[str]:
         """
@@ -205,6 +202,12 @@ class EmergencyBroadcastService:
         """
         if not recipient_emails:
             return False, {"error": "No recipient emails provided", "sent": 0, "failed": 0, "total": 0}
+        
+        if not self.is_configured:
+            return False, {
+                "error": "SMTP credentials not configured. Please set BROADCAST_EMAIL and BROADCAST_PASSWORD in .env",
+                "sent": 0, "failed": len(recipient_emails), "total": len(recipient_emails)
+            }
         
         stats = {
             "total": len(recipient_emails),

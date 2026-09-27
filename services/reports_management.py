@@ -27,10 +27,14 @@ class ReportsManagementService:
     def _should_use_fallback(self) -> bool:
         """Determine if we should use local fallback storage"""
         try:
-            test_ref = rtdb.reference('.info/connected')
+            if not firebase_admin._apps:
+                from auth import initialize_firebase
+                initialize_firebase()
+            test_ref = rtdb.reference('communityReports')
             test_ref.get()
             return False
-        except:
+        except Exception as e:
+            print(f"Firebase not available for Community Reports, falling back to local storage: {e}")
             return True
     
     def _get_local_reports_file(self) -> str:

@@ -20,6 +20,7 @@ class AQIAlertService:
         self._create_tables()
     
     def _create_tables(self):
+        os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute('''

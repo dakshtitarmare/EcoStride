@@ -62,8 +62,8 @@ class TeamXMap {
     init() {
         if (!document.getElementById('map')) return;
         this.map = L.map('map').setView([AMRAVATI_LAT, AMRAVATI_LON], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; Stadia &copy; OpenMapTiles &copy; OSM'
         }).addTo(this.map);
 
         // Load colony AQI pins as background layer
