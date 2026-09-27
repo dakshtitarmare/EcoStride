@@ -28,7 +28,7 @@ class ReportsManagementService:
         """Determine if we should use local fallback storage"""
         try:
             if not firebase_admin._apps:
-                from auth import initialize_firebase
+                from backend.auth import initialize_firebase
                 initialize_firebase()
             test_ref = rtdb.reference('communityReports')
             test_ref.get()

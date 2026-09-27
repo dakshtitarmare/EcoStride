@@ -2,12 +2,12 @@ import math
 import requests
 import random
 try:
-    from models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON, haversine
+    from backend.models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON, haversine
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON
+    from backend.models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON
 
 # ─────────────────────────────────────────────────────────────────
 # AQI-ZONE WAYPOINTS (Now handled dynamically)
@@ -233,7 +233,7 @@ class RoutePlanner:
         if not hasattr(RoutePlanner, '_area_cache'):
             RoutePlanner._area_cache = {}
         try:
-            from models.forecasting import AQIForecaster
+            from backend.models.forecasting import AQIForecaster
             owm = AQIForecaster().fetch_owm_by_coords(lat, lon)
             if owm and owm.get('aqi'):
                 RoutePlanner._area_cache[cache_key] = int(owm['aqi'])

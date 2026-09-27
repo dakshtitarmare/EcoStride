@@ -2,8 +2,8 @@
 import time
 import threading
 import schedule
-from models.forecasting import AQIForecaster
-from services.alert_service import AQIAlertService
+from backend.models.forecasting import AQIForecaster
+from backend.services.alert_service import AQIAlertService
 
 def start_background_tasks():
     print("🚀 Initializing background tasks...")

@@ -9,8 +9,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from services.community_message import CommunityMessageService
-from services.reports_management import ReportsManagementService
+from backend.services.community_message import CommunityMessageService
+from backend.services.reports_management import ReportsManagementService
 from datetime import datetime, timedelta
 import json
 

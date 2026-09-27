@@ -327,7 +327,7 @@ class AQIAlertService:
         subscribers = c.fetchall()
         conn.close()
         
-        from models.forecasting import AQIForecaster
+        from backend.models.forecasting import AQIForecaster
         forecaster = AQIForecaster()
         
         for sub in subscribers:

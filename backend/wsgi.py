@@ -1,0 +1,7 @@
+if __package__:
+    from .app import app
+else:
+    from app import app
+
+if __name__ == "__main__":
+    app.run()

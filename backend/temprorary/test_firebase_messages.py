@@ -7,8 +7,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from auth import initialize_firebase
-from services.community_message import CommunityMessageService
+from backend.auth import initialize_firebase
+from backend.services.community_message import CommunityMessageService
 from datetime import datetime, timedelta
 import json
 

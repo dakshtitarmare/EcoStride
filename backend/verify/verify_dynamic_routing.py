@@ -7,8 +7,8 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 try:
-    from models.routing import RoutePlanner
-    from models.forecasting import AQIForecaster
+    from backend.models.routing import RoutePlanner
+    from backend.models.forecasting import AQIForecaster
     print("✅ Imports successful")
 except Exception as e:
     print(f"❌ Import failed: {e}")

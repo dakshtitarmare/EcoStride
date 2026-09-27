@@ -3,14 +3,24 @@ from flask_cors import CORS
 import sys
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
 
-# Ensure the project root is in sys.path
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+BASE_DIR = Path(__file__).resolve().parent
 
-app = Flask(__name__)
+# Support both `python app.py` from backend/ and package imports from the
+# repository root (for example, `gunicorn backend.wsgi:app`).
+if __package__ in (None, ""):
+    sys.path.insert(0, str(BASE_DIR.parent))
+    sys.path.insert(0, str(BASE_DIR))
+
+app = Flask(
+    __name__,
+    template_folder=BASE_DIR / "templates",
+    static_folder=BASE_DIR / "static",
+)
 
 # Configure CORS explicitly for both localhost and 127.0.0.1
 CORS(app, 
@@ -18,6 +28,7 @@ CORS(app,
          r"/api/*": {
              "origins": [
                  "http://localhost:5173",
+                 "http://localhost:5173/login",
                  "http://localhost:3000",
                  "http://127.0.0.1:5173",
                  "http://127.0.0.1:3000",
@@ -32,11 +43,11 @@ CORS(app,
      }
 )
 
-from models.forecasting import AQIForecaster
-from models.routing import RoutePlanner
-from models.health_advisory import HealthAdvisor
-from models.policy_analysis import PolicySimulator
-from auth import (
+from backend.models.forecasting import AQIForecaster
+from backend.models.routing import RoutePlanner
+from backend.models.health_advisory import HealthAdvisor
+from backend.models.policy_analysis import PolicySimulator
+from backend.auth import (
     initialize_firebase, verify_google_token, user_exists,
     get_user_data, create_user, update_user_profile, get_user_by_email
 )
@@ -232,7 +243,7 @@ def simulate_policy():
 # --- Alert System Endpoints ---
 @app.route('/api/alerts/subscribe', methods=['POST'])
 def subscribe_alerts():
-    from services.alert_service import AQIAlertService
+    from backend.services.alert_service import AQIAlertService
     svc = AQIAlertService()
     data = request.json or {}
     contact = data.get('contact')
@@ -249,7 +260,7 @@ def subscribe_alerts():
 
 @app.route('/api/alerts/unsubscribe', methods=['POST'])  
 def unsubscribe_alerts():
-    from services.alert_service import AQIAlertService
+    from backend.services.alert_service import AQIAlertService
     svc = AQIAlertService()
     data = request.json or {}
     contact = data.get('contact')
@@ -261,7 +272,7 @@ def unsubscribe_alerts():
 
 @app.route('/api/alerts/test', methods=['POST'])
 def test_alert():
-    from services.alert_service import AQIAlertService
+    from backend.services.alert_service import AQIAlertService
     svc = AQIAlertService()
     data = request.json or {}
     contact = data.get('contact')
@@ -280,8 +291,8 @@ def test_alert():
 
 @app.route('/api/community/report', methods=['POST'])
 def community_report():
-    from services.reports_management import ReportsManagementService
-    from services.alert_service import AQIAlertService
+    from backend.services.reports_management import ReportsManagementService
+    from backend.services.alert_service import AQIAlertService
     reports_service = ReportsManagementService()
     alert_service = AQIAlertService()
     data = request.json or {}
@@ -310,7 +321,7 @@ def community_report():
 def get_community_reports():
     """Fetch community reports for the public community page"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
 
         service = ReportsManagementService()
         reports = service.get_all_reports(filter_status=request.args.get('status'))
@@ -786,7 +797,7 @@ def preview_broadcast_email():
     }
     """
     try:
-        from services.broadcast_email import EmergencyBroadcastService
+        from backend.services.broadcast_email import EmergencyBroadcastService
         
         data = request.json or {}
         title = data.get('title', '')
@@ -832,7 +843,7 @@ def send_broadcast_email():
     }
     """
     try:
-        from services.broadcast_email import EmergencyBroadcastService
+        from backend.services.broadcast_email import EmergencyBroadcastService
         
         data = request.json or {}
         title = data.get('title', '')
@@ -900,7 +911,7 @@ def test_broadcast_email():
     }
     """
     try:
-        from services.broadcast_email import EmergencyBroadcastService
+        from backend.services.broadcast_email import EmergencyBroadcastService
         
         data = request.json or {}
         test_email = data.get('test_email', '')
@@ -947,7 +958,7 @@ def test_broadcast_email():
 def get_community_messages():
     """Fetch all active (non-expired) community messages"""
     try:
-        from services.community_message import CommunityMessageService
+        from backend.services.community_message import CommunityMessageService
         service = CommunityMessageService()
         messages = service.get_active_messages()
         return jsonify({"status": "success", "messages": messages}), 200
@@ -960,7 +971,7 @@ def get_community_messages():
 def create_public_community_message():
     """Create and publish a community message from the public community page"""
     try:
-        from services.community_message import CommunityMessageService
+        from backend.services.community_message import CommunityMessageService
 
         data = request.json or {}
         title = data.get('title', '')
@@ -985,7 +996,7 @@ def create_public_community_message():
 def create_community_message():
     """Create and publish a new community message (admin only)"""
     try:
-        from services.community_message import CommunityMessageService
+        from backend.services.community_message import CommunityMessageService
         
         data = request.json or {}
         title = data.get('title', '')
@@ -1011,7 +1022,7 @@ def create_community_message():
 def update_community_message(message_id):
     """Update an existing community message (admin only)"""
     try:
-        from services.community_message import CommunityMessageService
+        from backend.services.community_message import CommunityMessageService
         
         data = request.json or {}
         title = data.get('title', '')
@@ -1037,7 +1048,7 @@ def update_community_message(message_id):
 def delete_community_message(message_id):
     """Delete a community message (admin only)"""
     try:
-        from services.community_message import CommunityMessageService
+        from backend.services.community_message import CommunityMessageService
         service = CommunityMessageService()
         success, result = service.delete_message(message_id)
         
@@ -1056,7 +1067,7 @@ def delete_community_message(message_id):
 def get_admin_reports():
     """Fetch all reports with optional filtering (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         # Optional filter by status: 'resolved', 'unresolved', or None for all
         status_filter = request.args.get('status', None)
@@ -1074,7 +1085,7 @@ def get_admin_reports():
 def get_reports_stats():
     """Get statistics about all reports (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         service = ReportsManagementService()
         stats = service.get_report_stats()
@@ -1089,7 +1100,7 @@ def get_reports_stats():
 def resolve_report(report_id):
     """Mark a report as resolved (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         service = ReportsManagementService()
         success, result = service.mark_resolved(report_id)
@@ -1107,7 +1118,7 @@ def resolve_report(report_id):
 def unresolve_report(report_id):
     """Mark a report as unresolved (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         service = ReportsManagementService()
         success, result = service.mark_unresolved(report_id)
@@ -1125,7 +1136,7 @@ def unresolve_report(report_id):
 def add_report_comment(report_id):
     """Add an admin comment to a report (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         data = request.json or {}
         admin_email = data.get('adminEmail', '')
@@ -1150,7 +1161,7 @@ def add_report_comment(report_id):
 def delete_admin_report(report_id):
     """Delete a report (admin only)"""
     try:
-        from services.reports_management import ReportsManagementService
+        from backend.services.reports_management import ReportsManagementService
         
         service = ReportsManagementService()
         success, result = service.delete_report(report_id)

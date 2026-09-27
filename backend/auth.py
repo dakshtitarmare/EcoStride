@@ -15,16 +15,18 @@ def initialize_firebase():
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
-    from config import FIREBASE_DATABASE_URL
+    from config import FIREBASE_DATABASE_URL, FIREBASE_CREDENTIALS
     import glob
     
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # 1. Try environment variable FIREBASE_CREDENTIALS (JSON string or file path)
-    firebase_credentials = os.getenv('FIREBASE_CREDENTIALS')
+    firebase_credentials = os.getenv('FIREBASE_CREDENTIALS') or FIREBASE_CREDENTIALS
     cred = None
 
     if firebase_credentials:
+        if not os.path.isabs(firebase_credentials):
+            firebase_credentials = os.path.join(base_dir, firebase_credentials)
         if os.path.exists(firebase_credentials):
             cred = credentials.Certificate(firebase_credentials)
         else:
@@ -39,6 +41,7 @@ def initialize_firebase():
         known_files = [
             os.path.join(base_dir, 'eco-stride2026-firebase-adminsdk-fbsvc-1f2810f333.json'),
             os.path.join(base_dir, 'eco-stride2026.json'),
+            os.path.join(base_dir, 'Keys', 'eco-stride2026.json'),
         ]
         # Also auto-discover any firebase-adminsdk json files
         known_files.extend(glob.glob(os.path.join(base_dir, '*firebase-adminsdk*.json')))
