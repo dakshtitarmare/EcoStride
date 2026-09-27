@@ -253,8 +253,12 @@ def subscribe_alerts():
     threshold = int(data.get('threshold', 100))
     contact_type = 'email' if '@' in contact else 'sms'
     try:
-        svc.subscribe(contact, contact_type, city, lat, lon, threshold)
-        return jsonify({"status": "success", "message": f"You'll receive alerts when AQI exceeds {threshold}"})
+        result = svc.subscribe(contact, contact_type, city, lat, lon, threshold)
+        return jsonify({
+            "status": "success",
+            "message": f"You'll receive alerts when AQI exceeds {threshold}",
+            **result
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 

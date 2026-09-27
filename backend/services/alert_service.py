@@ -72,11 +72,48 @@ class AQIAlertService:
         conn.commit()
         conn.close()
 
-        # FIX: Send confirmation immediately on subscribe
+        # Send confirmation immediately on subscribe
         if contact_type == 'email':
             self._send_subscription_confirmation(contact, city, threshold)
         elif contact_type == 'sms':
             self._send_sms_confirmation(contact, city, threshold)
+
+        # Check current AQI for this city/location immediately
+        alert_triggered = False
+        current_aqi = None
+        try:
+            from models.forecasting import AQIForecaster
+            forecaster = AQIForecaster()
+            current = forecaster.get_current(location=city, lat=lat, lon=lon)
+            current_aqi = current.get('aqi')
+            if current_aqi is not None and current_aqi > threshold:
+                alert_triggered = True
+                if contact_type == 'email':
+                    self.send_email_alert(contact, city, current_aqi, "")
+                else:
+                    self.send_sms_alert(contact, city, current_aqi, "")
+                
+                # Log immediate alert
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    c = conn.cursor()
+                    c.execute('SELECT id FROM subscribers WHERE contact=? AND active=1', (contact,))
+                    row = c.fetchone()
+                    if row:
+                        c.execute('INSERT INTO alert_logs (subscriber_id, city, aqi) VALUES (?, ?, ?)', (row[0], city, current_aqi))
+                        conn.commit()
+                    conn.close()
+                except Exception as log_err:
+                    print(f"Error logging initial alert: {log_err}")
+        except Exception as e:
+            print(f"Notice: Error checking initial AQI alert for {city}: {e}")
+
+        return {
+            "current_aqi": current_aqi,
+            "alert_triggered": alert_triggered,
+            "threshold": threshold,
+            "city": city
+        }
 
     def _send_subscription_confirmation(self, email_addr, city, threshold):
         """Send a confirmation email immediately when user subscribes."""

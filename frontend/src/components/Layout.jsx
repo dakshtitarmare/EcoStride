@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import NotificationPromptModal from './NotificationPromptModal';
 import { LocationProvider } from '../context/LocationContext';
 import { useLocation } from "../hooks/useLocation";
 import { Search, MapPin } from "lucide-react";
@@ -60,6 +61,7 @@ const LayoutContent = () => {
 
   return (
     <div className="app-container">
+      <NotificationPromptModal />
       <Sidebar />
       <main className="main-content">
         {/* Mobile-only Search Bar */}

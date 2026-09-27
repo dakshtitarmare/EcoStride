@@ -11,12 +11,11 @@ import {
   DivideSquare,
   Users,
   Search,
-  MapPin,
   LogOut,
   User,
+  Bell,
 } from "lucide-react";
 import axios from "axios";
-import { API_BASE_URL } from "../apiConfig";
 import ThemeToggle from "./ThemeToggle";
 
 const NAV_ITEMS = [
@@ -35,9 +34,6 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [alertForm, setAlertForm] = useState({ contact: "", threshold: 100 });
-  const [alertLoading, setAlertLoading] = useState(false);
-  const [alertMessage, setAlertMessage] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleSearch = async (e) => {
@@ -88,28 +84,6 @@ const Sidebar = () => {
     }
   };
 
-  const handleSubscribe = async (e) => {
-    e.preventDefault();
-    if (!alertForm.contact) return;
-    setAlertLoading(true);
-    setAlertMessage("");
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/alerts/subscribe`, {
-        contact: alertForm.contact,
-        threshold: alertForm.threshold,
-        city: location.city,
-        lat: location.lat,
-        lon: location.lon,
-      });
-      setAlertMessage(res.data.message || "Subscribed!");
-      setAlertForm({ contact: "", threshold: 100 });
-    } catch {
-      setAlertMessage("Error subscribing.");
-    } finally {
-      setAlertLoading(false);
-    }
-  };
-
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
@@ -117,6 +91,11 @@ const Sidebar = () => {
 
   const handleProfileSetup = () => {
     navigate("/profile-setup");
+  };
+
+  const handleOpenNotifications = () => {
+    window.dispatchEvent(new Event("open-notification-modal"));
+    setShowUserMenu(false);
   };
 
   return (
@@ -155,6 +134,13 @@ const Sidebar = () => {
                 >
                   <User size={16} />
                   <span>Edit Profile</span>
+                </button>
+                <button
+                  className="user-dropdown-item"
+                  onClick={handleOpenNotifications}
+                >
+                  <Bell size={16} />
+                  <span>Notification Settings</span>
                 </button>
                 <div className="user-dropdown-divider"></div>
                 <button
@@ -248,103 +234,6 @@ const Sidebar = () => {
             </NavLink>
           ))}
         </nav>
-
-        {/* Alert widget (desktop only) */}
-        {!window.matchMedia("(max-width: 768px)").matches && (
-          <form
-            onSubmit={handleSubscribe}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid rgba(245,197,66,0.15)",
-              borderRadius: "8px",
-              padding: "0.75rem",
-              margin: "12px",
-              marginTop: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.7rem",
-                color: "var(--aqi-moderate)",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                fontWeight: 600,
-              }}
-            >
-              🔔 AQI Alerts
-            </div>
-            <input
-              type="text"
-              placeholder="Email or phone"
-              value={alertForm.contact}
-              onChange={(e) =>
-                setAlertForm({ ...alertForm, contact: e.target.value })
-              }
-              className="input"
-              style={{
-                padding: "6px 10px",
-                fontSize: "0.75rem",
-                height: "auto",
-              }}
-              required
-            />
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              <span
-                style={{
-                  color: "var(--text-secondary)",
-                  fontSize: "0.7rem",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                AQI &gt;
-              </span>
-              <select
-                value={alertForm.threshold}
-                onChange={(e) =>
-                  setAlertForm({
-                    ...alertForm,
-                    threshold: parseInt(e.target.value),
-                  })
-                }
-                className="input"
-                style={{
-                  padding: "4px 6px",
-                  fontSize: "0.75rem",
-                  height: "auto",
-                  flex: 1,
-                }}
-              >
-                <option value="50">50 — Mod</option>
-                <option value="100">100 — Unhealthy</option>
-                <option value="150">150 — Poor</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="btn-primary"
-              style={{ padding: "6px", fontSize: "0.7rem", width: "100%" }}
-              disabled={alertLoading}
-            >
-              {alertLoading ? "Wait…" : "Subscribe"}
-            </button>
-            {alertMessage && (
-              <div
-                style={{
-                  color: "var(--accent)",
-                  fontSize: "0.65rem",
-                  textAlign: "center",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                {alertMessage}
-              </div>
-            )}
-          </form>
-        )}
       </aside>
 
       {/* ── Mobile bottom nav ── */}
