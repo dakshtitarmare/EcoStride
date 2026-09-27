@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { to: "/dashboard/safe-zones", icon: Heart, label: "Safe Zones", sub: "Clean Areas" },
   { to: "/dashboard/compare", icon: DivideSquare, label: "Compare", sub: "Cities" },
   { to: "/dashboard/community", icon: Users, label: "Community", sub: "Reports" },
+  { to: "/dashboard/alerts", icon: Bell, label: "Alerts", sub: "Notifications" },
 ];
 
 const Sidebar = () => {
@@ -94,7 +95,7 @@ const Sidebar = () => {
   };
 
   const handleOpenNotifications = () => {
-    window.dispatchEvent(new Event("open-notification-modal"));
+    navigate("/dashboard/alerts");
     setShowUserMenu(false);
   };
 

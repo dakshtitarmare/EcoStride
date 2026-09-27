@@ -21,6 +21,7 @@ import AdminProtectedRoute from './components/AdminProtectedRoute';
 import CommunityMessageAdmin from './pages/CommunityMessageAdmin';
 import CommunityReportsAdmin from './pages/CommunityReportsAdmin';
 import AccountBlocked from './pages/AccountBlocked';
+import AlertSettings from './pages/AlertSettings';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="safe-zones" element={<SafeZones />} />
             <Route path="compare" element={<Compare />} />
             <Route path="community" element={<Community />} />
+            <Route path="alerts" element={<AlertSettings />} />
           </Route>
 
           {/* Catch all - redirect to login */}

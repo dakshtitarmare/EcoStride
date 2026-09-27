@@ -243,14 +243,30 @@ def simulate_policy():
 # --- Alert System Endpoints ---
 @app.route('/api/alerts/subscribe', methods=['POST'])
 def subscribe_alerts():
-    from backend.services.alert_service import AQIAlertService
+    try:
+        from backend.services.alert_service import AQIAlertService
+    except ImportError:
+        from services.alert_service import AQIAlertService
     svc = AQIAlertService()
     data = request.json or {}
-    contact = data.get('contact')
-    city = data.get('city', 'Amravati')
-    lat = float(data.get('lat', 20.9343))
-    lon = float(data.get('lon', 77.7489))
-    threshold = int(data.get('threshold', 100))
+    contact = (data.get('contact') or '').strip()
+    if not contact:
+        return jsonify({"status": "error", "message": "Email address or contact is required."}), 400
+
+    city = (data.get('city') or 'Pune').strip()
+    try:
+        lat = float(data.get('lat', 18.5204))
+    except (ValueError, TypeError):
+        lat = 18.5204
+    try:
+        lon = float(data.get('lon', 73.8567))
+    except (ValueError, TypeError):
+        lon = 73.8567
+    try:
+        threshold = int(data.get('threshold', 100))
+    except (ValueError, TypeError):
+        threshold = 100
+
     contact_type = 'email' if '@' in contact else 'sms'
     try:
         result = svc.subscribe(contact, contact_type, city, lat, lon, threshold)
@@ -260,11 +276,15 @@ def subscribe_alerts():
             **result
         })
     except Exception as e:
+        print(f"Error subscribing alerts: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/alerts/unsubscribe', methods=['POST'])  
 def unsubscribe_alerts():
-    from backend.services.alert_service import AQIAlertService
+    try:
+        from backend.services.alert_service import AQIAlertService
+    except ImportError:
+        from services.alert_service import AQIAlertService
     svc = AQIAlertService()
     data = request.json or {}
     contact = data.get('contact')
@@ -273,6 +293,20 @@ def unsubscribe_alerts():
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/alerts/status', methods=['GET'])
+def get_alert_status():
+    contact = request.args.get('contact', '').strip()
+    if not contact:
+        return jsonify({"status": "error", "message": "contact parameter required"}), 400
+    try:
+        from backend.services.alert_service import AQIAlertService
+    except ImportError:
+        from services.alert_service import AQIAlertService
+    svc = AQIAlertService()
+    sub = svc.get_subscription(contact)
+    return jsonify({"status": "success", "subscription": sub})
+
 
 @app.route('/api/alerts/test', methods=['POST'])
 def test_alert():

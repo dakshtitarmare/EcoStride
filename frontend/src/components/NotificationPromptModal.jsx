@@ -101,18 +101,33 @@ const NotificationPromptModal = ({ isOpen, onClose }) => {
       }
     }
 
-    // 2. Register subscription with backend API
+    // 2. Register or update subscription with backend API
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/alerts/subscribe`, {
-        contact: user.email,
-        contact_type: "email",
-        city: targetCity,
-        lat: location?.lat || 18.5204,
-        lon: location?.lon || 73.8567,
-        threshold: targetThreshold,
-      });
-
-      const data = res.data || {};
+      let data = {};
+      if (enableEmailNotif) {
+        const res = await axios.post(`${API_BASE_URL}/api/alerts/subscribe`, {
+          contact: user.email,
+          contact_type: "email",
+          city: targetCity,
+          lat: location?.lat || 18.5204,
+          lon: location?.lon || 73.8567,
+          threshold: targetThreshold,
+        });
+        data = res.data || {};
+      } else {
+        try {
+          await axios.post(`${API_BASE_URL}/api/alerts/unsubscribe`, { contact: user.email });
+        } catch (e) {
+          // ignore if already not in database
+        }
+        data = {
+          city: targetCity,
+          threshold: targetThreshold,
+          email_sent: false,
+          email_status: "Email alerts disabled",
+          alert_triggered: false,
+        };
+      }
       setResult(data);
 
       if (user?.email) {
@@ -429,37 +444,95 @@ const NotificationPromptModal = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* Notification Method Checkboxes */}
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "6px",
-                  backgroundColor: "var(--bg-surface, #0d1117)",
-                  border: "1px solid var(--border, #30363d)",
-                  marginBottom: "20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", cursor: "pointer" }}>
+              {/* Notification Method Options */}
+              <div style={{ marginBottom: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-secondary, #8b949e)", textAlign: "left" }}>
+                  Notification Channels
+                </div>
+
+                {/* Email Option Card */}
+                <div
+                  onClick={() => setEnableEmailNotif(!enableEmailNotif)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: `1px solid ${enableEmailNotif ? "rgba(0, 229, 160, 0.4)" : "var(--border, #30363d)"}`,
+                    backgroundColor: enableEmailNotif ? "rgba(0, 229, 160, 0.05)" : "var(--bg-surface, #0d1117)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={enableEmailNotif}
-                    onChange={(e) => setEnableEmailNotif(e.target.checked)}
-                    style={{ accentColor: "var(--accent, #00e5a0)" }}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setEnableEmailNotif(e.target.checked);
+                    }}
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      minWidth: "16px",
+                      cursor: "pointer",
+                      accentColor: "var(--accent, #00e5a0)",
+                      margin: 0,
+                      flexShrink: 0,
+                    }}
                   />
-                  <span>Send email alerts to <strong>{user?.email}</strong></span>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", cursor: "pointer" }}>
+                  <div style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 500, color: "var(--text-primary, #f0f6fc)" }}>
+                      Email Alerts
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "var(--text-secondary, #8b949e)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Send alert emails to <span style={{ color: "var(--accent, #00e5a0)", fontWeight: 500 }}>{user?.email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop Push Option Card */}
+                <div
+                  onClick={() => setEnableBrowserNotif(!enableBrowserNotif)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: `1px solid ${enableBrowserNotif ? "rgba(0, 229, 160, 0.4)" : "var(--border, #30363d)"}`,
+                    backgroundColor: enableBrowserNotif ? "rgba(0, 229, 160, 0.05)" : "var(--bg-surface, #0d1117)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={enableBrowserNotif}
-                    onChange={(e) => setEnableBrowserNotif(e.target.checked)}
-                    style={{ accentColor: "var(--accent, #00e5a0)" }}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setEnableBrowserNotif(e.target.checked);
+                    }}
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      minWidth: "16px",
+                      cursor: "pointer",
+                      accentColor: "var(--accent, #00e5a0)",
+                      margin: 0,
+                      flexShrink: 0,
+                    }}
                   />
-                  <span>Enable desktop push notifications</span>
-                </label>
+                  <div style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 500, color: "var(--text-primary, #f0f6fc)" }}>
+                      Desktop Push Notifications
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "var(--text-secondary, #8b949e)", marginTop: "2px" }}>
+                      Instant popup notification on this browser
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}

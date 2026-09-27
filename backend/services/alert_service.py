@@ -151,7 +151,10 @@ class AQIAlertService:
         alert_triggered = False
         current_aqi = None
         try:
-            from models.forecasting import AQIForecaster
+            try:
+                from backend.models.forecasting import AQIForecaster
+            except ImportError:
+                from models.forecasting import AQIForecaster
             forecaster = AQIForecaster()
             current = forecaster.get_current(location=city, lat=lat, lon=lon)
             current_aqi = current.get('aqi')
@@ -274,6 +277,30 @@ class AQIAlertService:
         c.execute('DELETE FROM subscribers WHERE contact = ?', (contact,))
         conn.commit()
         conn.close()
+
+    def get_subscription(self, contact):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute('SELECT id, contact, contact_type, city, lat, lon, threshold, active, created_at FROM subscribers WHERE contact = ? AND active = 1 ORDER BY id DESC LIMIT 1', (contact,))
+            row = c.fetchone()
+            conn.close()
+            if row:
+                return {
+                    "id": row[0],
+                    "contact": row[1],
+                    "contact_type": row[2],
+                    "city": row[3],
+                    "lat": row[4],
+                    "lon": row[5],
+                    "threshold": row[6],
+                    "active": bool(row[7]),
+                    "created_at": row[8],
+                    "subscribed": True
+                }
+        except Exception as e:
+            print(f"Error fetching subscription for {contact}: {e}")
+        return {"subscribed": False}
         
     def send_email_alert(self, email_addr, city, aqi, message):
         html = f"""
