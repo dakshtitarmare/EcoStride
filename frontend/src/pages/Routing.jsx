@@ -61,8 +61,11 @@ const Routing = () => {
   // ── Suggestion debounce refs (one timer + one abort controller per field) ──
   const suggestTimers = useRef({ start: null, end: null });
   const suggestAborts = useRef({ start: null, end: null });
+  const suggestRequestIds = useRef({ start: 0, end: 0 });
 
   const fetchSuggestions = useCallback((val, type) => {
+    const requestId = ++suggestRequestIds.current[type];
+
     // Clear any pending timer for this field
     if (suggestTimers.current[type]) {
       clearTimeout(suggestTimers.current[type]);
@@ -87,10 +90,12 @@ const Routing = () => {
           timeout: 7000,
           signal: controller.signal,
         });
+        if (requestId !== suggestRequestIds.current[type]) return;
         const results = response.data.places || [];
         setSuggestions((prev) => ({ ...prev, [type]: results }));
       } catch (e) {
-        if (e.name !== "AbortError") {
+        const wasCancelled = e.name === "AbortError" || axios.isCancel(e);
+        if (!wasCancelled && requestId === suggestRequestIds.current[type]) {
           console.error("Suggestion error:", e);
           setSuggestions((prev) => ({ ...prev, [type]: [] }));
         }
@@ -316,6 +321,7 @@ const Routing = () => {
                 setStartCoords(null);
                 fetchSuggestions(e.target.value, "start");
               }}
+              onFocus={() => fetchSuggestions(start, "start")}
               placeholder="e.g. Bandra, Mumbai or Tech Park"
               style={{ width: "100%", boxSizing: "border-box" }}
             />
@@ -374,6 +380,7 @@ const Routing = () => {
                 setEndCoords(null);
                 fetchSuggestions(e.target.value, "end");
               }}
+              onFocus={() => fetchSuggestions(end, "end")}
               placeholder="e.g. Viman Nagar, Pune or MG Road"
               style={{ width: "100%", boxSizing: "border-box" }}
             />
