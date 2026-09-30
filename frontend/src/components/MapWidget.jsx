@@ -101,11 +101,12 @@ const createAqiIcon = (aqi) => {
 };
 
 // Component to center on a point — pans/flies to new coordinates whenever they change
-const MapController = ({ center }) => {
+const MapController = ({ center, route }) => {
   const map = useMap();
   const lastCenter = useRef(null);
 
   useEffect(() => {
+    if (route?.geometry?.coordinates?.length > 1) return;
     if (!center || typeof center[0] !== 'number' || typeof center[1] !== 'number') return;
     const isDifferent =
       !lastCenter.current ||
@@ -134,12 +135,15 @@ const FitRoute = ({ route, allRoutes }) => {
     }
     if (didFit.current) return; // user is panning — don't snap back
 
-    if (route && route.geometry) {
-      const coords = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+    if (route?.geometry?.coordinates?.length > 1) {
+      const coords = route.geometry.coordinates
+        .filter((coordinate) => Array.isArray(coordinate) && coordinate.length >= 2)
+        .map((coordinate) => [coordinate[1], coordinate[0]]);
       if (coords.length > 0) {
         map.fitBounds(L.polyline(coords).getBounds(), {
           padding: [50, 50],
           animate: true,
+          maxZoom: 15,
         });
         didFit.current = true;
       }
@@ -376,10 +380,10 @@ const MapWidget = ({
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        <MapController center={[centerLat, centerLon]} />
+        <MapController center={[centerLat, centerLon]} route={route} />
         <FitRoute
           route={route}
-          allRoutes={allRoutes.length > 0 && !route ? allRoutes : null}
+          allRoutes={allRoutes}
         />
 
         {/* User GPS point */}
