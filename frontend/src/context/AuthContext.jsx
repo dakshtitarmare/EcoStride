@@ -32,20 +32,24 @@ export const AuthProvider = ({ children }) => {
         const storedUser = localStorage.getItem('ecostrideUser');
 
         if (storedToken && storedUser) {
+          // Restore the last known session immediately; token validation runs in the background.
+          const storedUserObj = JSON.parse(storedUser);
+          setIdToken(storedToken);
+          setUser(storedUserObj);
+          setIsBlocked(storedUserObj.status === 'blocked');
+          setLoading(false);
+
           // Verify token is still valid
           const response = await axios.post(`${API_BASE_URL}/api/auth/verify`, {
             idToken: storedToken
           }, { timeout: AUTH_REQUEST_TIMEOUT });
 
-          if (response.data.valid) {
-            setIdToken(storedToken);
-            const storedUserObj = JSON.parse(storedUser);
-            setUser(storedUserObj);
-            setIsBlocked(storedUserObj.status === 'blocked');
-          } else {
+          if (!response.data.valid) {
             // Token invalid, clear storage
             localStorage.removeItem('firebaseIdToken');
             localStorage.removeItem('ecostrideUser');
+            setUser(null);
+            setIdToken(null);
           }
         }
       } catch (err) {
