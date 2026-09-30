@@ -6,6 +6,7 @@ import { LocationProvider } from '../context/LocationContext';
 import { useLocation } from "../hooks/useLocation";
 import { Search, MapPin } from "lucide-react";
 import axios from "axios";
+import EcoChatbot from "./EcoChatbot";
 
 const LayoutContent = () => {
   const { location, setManualLocation, getGPS } = useLocation();
@@ -62,6 +63,7 @@ const LayoutContent = () => {
   return (
     <div className="app-container">
       <NotificationPromptModal />
+      <EcoChatbot />
       <Sidebar />
       <main className="main-content">
         {/* Mobile-only Search Bar */}

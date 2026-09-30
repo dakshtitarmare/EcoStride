@@ -19,6 +19,7 @@ def initialize_firebase():
     import glob
     
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(base_dir)
 
     # 1. Try environment variable FIREBASE_CREDENTIALS (JSON string or file path)
     firebase_credentials = os.getenv('FIREBASE_CREDENTIALS') or FIREBASE_CREDENTIALS
@@ -42,10 +43,14 @@ def initialize_firebase():
             os.path.join(base_dir, 'eco-stride2026-firebase-adminsdk-fbsvc-1f2810f333.json'),
             os.path.join(base_dir, 'eco-stride2026.json'),
             os.path.join(base_dir, 'Keys', 'eco-stride2026.json'),
+            os.path.join(project_dir, 'eco-stride2026-firebase-adminsdk-fbsvc-1f2810f333.json'),
+            os.path.join(project_dir, 'eco-stride2026.json'),
         ]
         # Also auto-discover any firebase-adminsdk json files
         known_files.extend(glob.glob(os.path.join(base_dir, '*firebase-adminsdk*.json')))
         known_files.extend(glob.glob(os.path.join(base_dir, 'eco-stride*.json')))
+        known_files.extend(glob.glob(os.path.join(project_dir, '*firebase-adminsdk*.json')))
+        known_files.extend(glob.glob(os.path.join(project_dir, 'eco-stride*.json')))
 
         for candidate in set(known_files):
             if os.path.exists(candidate):

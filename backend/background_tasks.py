@@ -10,8 +10,8 @@ def start_background_tasks():
     
     alert_service = AQIAlertService()
     
-    # Check AQI and send alerts every 30 minutes
-    schedule.every(30).minutes.do(alert_service.check_and_send_alerts)
+    # Check subscribed AQI alerts every six hours.
+    schedule.every(6).hours.do(alert_service.check_and_send_alerts)
     
     def run_scheduler():
         while True:

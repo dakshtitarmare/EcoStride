@@ -102,4 +102,8 @@ frontend/eslint-result.json
 frontend/lint_errors.json
 frontend/lint_logs.txt
 
+# Runtime notification logs
+backend/local_storage/*.json
+local_storage/*.json
+
 eco-stride2026.json

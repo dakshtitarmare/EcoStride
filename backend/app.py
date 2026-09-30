@@ -21,23 +21,21 @@ app = Flask(
     template_folder=BASE_DIR / "templates",
     static_folder=BASE_DIR / "static",
 )
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 1 * 1024 * 1024))
 
-# Configure CORS explicitly for both localhost and 127.0.0.1
+# Configure CORS from an allowlist instead of accepting arbitrary origins.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        'ALLOWED_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://map-aqi.vercel.app'
+    ).split(',')
+    if origin.strip()
+]
 CORS(app, 
      resources={
          r"/api/*": {
-             "origins": [
-                 "http://localhost:5173",
-                 "http://localhost:5173/login",
-                 "http://localhost:3000",
-                 "http://127.0.0.1:5173",
-                 "http://127.0.0.1:3000",
-                 "http://localhost:5000",
-                 "http://127.0.0.1:5000",
-                 "https://map-aqi.vercel.app/",
-                 "https://map-aqi.vercel.app",
-
-             ],
+             "origins": allowed_origins,
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization"],
              "supports_credentials": True,
@@ -54,6 +52,7 @@ from backend.auth import (
     initialize_firebase, verify_google_token, user_exists,
     get_user_data, create_user, update_user_profile, get_user_by_email
 )
+from backend.background_tasks import start_background_tasks
 
 # Initialize Firebase
 try:
@@ -67,6 +66,9 @@ forecaster = AQIForecaster()
 router     = RoutePlanner()
 advisor    = HealthAdvisor()
 simulator  = PolicySimulator()
+
+# Start periodic AQI notification checks after application services initialize.
+start_background_tasks()
 
 # --- Page Routes ---
 @app.route('/', methods=['GET'])
@@ -218,6 +220,32 @@ def get_advisory():
         "risk_assessment": risk,
         "advisory":        advice,
     })
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    data = request.json or {}
+    question = str(data.get('message', '')).strip()
+    if not question:
+        return jsonify({"status": "error", "message": "A question is required"}), 400
+
+    city = str(data.get('city') or 'Pune')
+    try:
+        lat = float(data.get('lat')) if data.get('lat') is not None else 18.5204
+        lon = float(data.get('lon')) if data.get('lon') is not None else 73.8567
+    except (TypeError, ValueError):
+        lat, lon = 18.5204, 73.8567
+
+    current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    context = {
+        "city": city,
+        "latitude": lat,
+        "longitude": lon,
+        "aqi": current.get('aqi'),
+        "category": current.get('category'),
+        "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
+    }
+    answer = advisor.answer_chat_question(question, context)
+    return jsonify({"status": "success", "answer": answer, "context": context})
 
 # --- Policy Simulation Endpoints ---
 @app.route('/api/policy/scenarios', methods=['GET'])

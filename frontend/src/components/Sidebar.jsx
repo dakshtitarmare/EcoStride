@@ -171,25 +171,16 @@ const Sidebar = () => {
         </div>
 
         {/* City search */}
-        <div className="sidebar-search-wrap" style={{ position: "relative" }}>
-          <Search
-            size={13}
-            className="sidebar-search-icon"
-            style={{ top: "18px", transform: "none" }}
-          />
+        <div className="sidebar-search-wrap">
+          <Search size={15} className="sidebar-search-icon" />
           <input
             type="text"
-            placeholder="Search city…"
+            placeholder="Search city..."
             value={searchQuery}
             onChange={handleSearch}
             onKeyDown={handleKeyDown}
-            className="input"
-            style={{
-              paddingLeft: "32px",
-              paddingRight: "32px",
-              height: "36px",
-              fontSize: "0.82rem",
-            }}
+            className="sidebar-city-search"
+            aria-label="Search city"
           />
           <button
             type="button"

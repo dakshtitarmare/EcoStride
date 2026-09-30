@@ -448,7 +448,7 @@ class AQIAlertService:
                     can_send = True
                     if row:
                         last_sent = datetime.datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
-                        if (datetime.datetime.now() - last_sent).total_seconds() < 4 * 3600:
+                        if (datetime.datetime.now() - last_sent).total_seconds() < 6 * 3600:
                             can_send = False
                             
                     if can_send:

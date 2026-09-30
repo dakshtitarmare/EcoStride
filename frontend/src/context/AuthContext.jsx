@@ -3,6 +3,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../apiConfig';
 import { getUserByUid } from '../utils/firebase';
 
+const AUTH_REQUEST_TIMEOUT = 10000;
+
 // Create Auth Context
 export const AuthContext = createContext();
 
@@ -33,7 +35,7 @@ export const AuthProvider = ({ children }) => {
           // Verify token is still valid
           const response = await axios.post(`${API_BASE_URL}/api/auth/verify`, {
             idToken: storedToken
-          });
+          }, { timeout: AUTH_REQUEST_TIMEOUT });
 
           if (response.data.valid) {
             setIdToken(storedToken);
@@ -48,6 +50,10 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (err) {
         console.error('Auth check failed:', err);
+        localStorage.removeItem('firebaseIdToken');
+        localStorage.removeItem('ecostrideUser');
+        setUser(null);
+        setIdToken(null);
       } finally {
         setLoading(false);
       }
@@ -90,7 +96,7 @@ export const AuthProvider = ({ children }) => {
       // Send token to backend for verification for non-blocked users
       const response = await axios.post(`${API_BASE_URL}/api/auth/signin`, {
         idToken: googleIdToken
-      });
+      }, { timeout: AUTH_REQUEST_TIMEOUT });
 
       if (response.data.status === 'success') {
         const userData = response.data.user;

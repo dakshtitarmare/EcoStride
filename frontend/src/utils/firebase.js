@@ -19,13 +19,13 @@ import {
 
 // Firebase config from .env with fallback defaults matching eco-stride2026
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyC9cER-OXpDP7uDp5dNgiDjwPG5gGk7YHI",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "eco-stride2026.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "eco-stride2026",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "eco-stride2026.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "697629931097",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:697629931097:web:4fdc0cfc907543f3666348",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://eco-stride2026-default-rtdb.firebaseio.com"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
 };
 
 // Initialize Firebase
@@ -199,7 +199,10 @@ export const getAllUsers = async () => {
 export const getUserByUid = async (uid) => {
   try {
     const userRef = ref(database, `users/${uid}`);
-    const snapshot = await get(userRef);
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Firebase user lookup timed out")), 10000);
+    });
+    const snapshot = await Promise.race([get(userRef), timeout]);
     return snapshot.exists() ? snapshot.val() : null;
   } catch (error) {
     console.error("Error fetching user by uid:", error);

@@ -4,12 +4,12 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 try:
-    from config import GROQ_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import GROQ_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 
 class HealthAdvisor:
     def __init__(self):
@@ -80,6 +80,110 @@ class HealthAdvisor:
             return self._generate_groq_advisory(prompt)
         else:
             return self._generate_fallback_advisory(profile, current_aqi)
+
+    def answer_chat_question(self, question, context):
+        """Answer a user question using the current application data."""
+        prompt = f"""
+You are EcoStride's in-app assistant. Answer the user's question using the live application data below.
+Be concise, practical, and honest. Do not invent measurements or claim to have performed actions.
+If the question is unrelated to EcoStride, briefly say you can help with air quality, health, routes,
+safe zones, forecasts, policies, alerts, and community reports.
+
+Current application data:
+{json.dumps(context, indent=2, default=str)}
+
+User question: {question}
+"""
+
+        if USE_LOCAL_LLM:
+            return self._generate_ollama_advisory(prompt)
+        if GROQ_API_KEY and GROQ_API_KEY != "your_free_key_here":
+            groq_answer = self._generate_groq_chat(prompt)
+            if groq_answer:
+                return groq_answer
+        if GEMINI_API_KEY and GEMINI_API_KEY != "your_api_key_here":
+            gemini_answer = self._generate_gemini_chat(prompt)
+            if gemini_answer:
+                return gemini_answer
+
+        return self._generate_fallback_chat(question, context)
+
+    def _generate_fallback_chat(self, question, context):
+        """Answer common EcoStride questions without an external model."""
+        question_lower = question.lower()
+        city = context.get("city", "your area")
+        aqi = context.get("aqi")
+        category = context.get("category") or "the reported level"
+        pollutants = context.get("pollutants", {})
+
+        if any(word in question_lower for word in ("pollut", "pm2", "pm10", "no2", "ozone", "o3")):
+            available = ", ".join(
+                f"{name.upper()} {value}" for name, value in pollutants.items() if value is not None
+            )
+            return f"Pollutant readings for {city}: {available or 'detailed pollutant readings are unavailable right now'}."
+        if any(word in question_lower for word in ("health", "safe", "breathe", "exercise", "outdoor", "mask", "precaution")):
+            if aqi is None:
+                return f"I cannot see a current AQI reading for {city}. Avoid prolonged heavy outdoor exercise until the reading is available."
+            advice = "Normal outdoor activity is generally reasonable, but sensitive people should monitor symptoms." if aqi <= 100 else "Reduce prolonged outdoor activity, consider a well-fitting mask, and keep windows closed when pollution is high."
+            return f"{city} is at AQI {aqi} ({category}). {advice}"
+        if any(word in question_lower for word in ("route", "routing", "path", "travel", "commute")):
+            return "Open Routing to compare an air-quality-aware route. Enter your start and destination and EcoStride will calculate the available options."
+        if any(word in question_lower for word in ("forecast", "tomorrow", "later", "next", "predict")):
+            return "Open Forecast for the 72-hour AQI outlook. The current reading is refreshed from the selected location."
+        if any(word in question_lower for word in ("alert", "notification", "notify", "email")):
+            return "Open Alerts to choose an AQI threshold and notification method. Email delivery requires valid SMTP credentials."
+        if any(word in question_lower for word in ("where", "location", "city", "place")):
+            return f"EcoStride is currently using {city} at {context.get('latitude')}, {context.get('longitude')}."
+        if aqi is not None:
+            return f"For {city}, the current AQI is {aqi} ({category}). Ask me about pollutants, health precautions, routes, forecasts, or alerts."
+        return "I can help with air quality, pollutants, health precautions, routes, forecasts, safe zones, policies, and alerts."
+
+    def _generate_groq_chat(self, prompt):
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        try:
+            response = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'llama-3.3-70b-versatile',
+                    'messages': [
+                        {'role': 'system', 'content': 'You are the EcoStride environmental health assistant.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'temperature': 0.4,
+                    'max_tokens': 450
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                return response.json()['choices'][0]['message']['content']
+            print(f"Groq chat error: {response.status_code} - {response.text}")
+        except Exception as error:
+            print(f"Groq chat connection error: {error}")
+        return None
+
+    def _generate_gemini_chat(self, prompt):
+        try:
+            response = requests.post(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+                params={'key': GEMINI_API_KEY},
+                json={
+                    'contents': [{'parts': [{'text': prompt}]}],
+                    'generationConfig': {'temperature': 0.4, 'maxOutputTokens': 450}
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                parts = response.json().get('candidates', [{}])[0].get('content', {}).get('parts', [])
+                answer = ''.join(part.get('text', '') for part in parts).strip()
+                return answer or None
+            print(f"Gemini chat error: {response.status_code} - {response.text}")
+        except Exception as error:
+            print(f"Gemini chat connection error: {error}")
+        return None
 
     def _generate_ollama_advisory(self, prompt):
         try:
