@@ -194,7 +194,14 @@ def get_map_pins():
     lat = float(request.args.get('lat', 18.5204))
     lon = float(request.args.get('lon', 73.8567))
     city = request.args.get('city', 'Pune')
-    pins = forecaster.get_colony_pins(lat, lon, city)
+    bounds = None
+    bound_keys = ('south', 'west', 'north', 'east')
+    if all(request.args.get(key) for key in bound_keys):
+        try:
+            bounds = {key: float(request.args.get(key)) for key in bound_keys}
+        except (TypeError, ValueError):
+            bounds = None
+    pins = forecaster.get_colony_pins(lat, lon, city, bounds=bounds)
     return jsonify({"status": "success", "pins": pins})
 
 # --- Health Advisory Endpoints ---

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -255,6 +255,30 @@ const MapResizer = () => {
   return null;
 };
 
+const MapViewportWatcher = ({ onViewportChange }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const handleMoveEnd = () => {
+      const center = map.getCenter();
+      const bounds = map.getBounds();
+      onViewportChange({
+        lat: center.lat,
+        lon: center.lng,
+        south: bounds.getSouth(),
+        west: bounds.getWest(),
+        north: bounds.getNorth(),
+        east: bounds.getEast(),
+      });
+    };
+
+    map.on("moveend", handleMoveEnd);
+    return () => map.off("moveend", handleMoveEnd);
+  }, [map, onViewportChange]);
+
+  return null;
+};
+
 const MapWidget = ({
   lat,
   lon,
@@ -273,13 +297,23 @@ const MapWidget = ({
 
   const [pins, setPins] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewport, setViewport] = useState(null);
+
+  const handleViewportChange = useCallback((nextViewport) => {
+    setViewport(nextViewport);
+  }, []);
 
   useEffect(() => {
     const fetchPins = async () => {
       try {
         setLoading(true);
+        const requestLat = viewport?.lat ?? lat;
+        const requestLon = viewport?.lon ?? lon;
+        const boundsQuery = viewport
+          ? `&south=${viewport.south}&west=${viewport.west}&north=${viewport.north}&east=${viewport.east}`
+          : "";
         const res = await axios.get(
-          `${API_BASE_URL}/api/map/pins?lat=${lat}&lon=${lon}&city=${city}`,
+          `${API_BASE_URL}/api/map/pins?lat=${requestLat}&lon=${requestLon}&city=${encodeURIComponent(city)}${boundsQuery}`,
         );
         setPins(res.data.pins || []);
       } catch (err) {
@@ -290,9 +324,9 @@ const MapWidget = ({
     };
     if (lat && lon && city) fetchPins();
 
-    const interval = setInterval(fetchPins, 30 * 60 * 1000);
+    const interval = setInterval(fetchPins, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [lat, lon, city]);
+  }, [lat, lon, city, viewport]);
 
   if (!centerLat || !centerLon) {
     return (
@@ -337,6 +371,7 @@ const MapWidget = ({
         style={{ width: "100%", height: "100%" }}
       >
         <MapResizer />
+        <MapViewportWatcher onViewportChange={handleViewportChange} />
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

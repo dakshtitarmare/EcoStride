@@ -458,10 +458,69 @@ class AQIForecaster:
         sources.sort(key=lambda x: x["concentration_score"], reverse=True)
         return sources
 
-    def get_locations_for_city(self, city_name, lat, lon, radius_km=30):
+    def _discover_osm_places(self, bounds):
+        """Discover real schools, colleges, neighbourhoods, and parks in the viewport."""
+        if not bounds:
+            return []
+        south, west = bounds['south'], bounds['west']
+        north, east = bounds['north'], bounds['east']
+        if north <= south or east <= west or (north - south) * (east - west) > 1.0:
+            return []
+
+        query = f"""
+        [out:json][timeout:8];
+        (
+          nwr["amenity"~"college|university|school"]({south},{west},{north},{east});
+          nwr["place"~"suburb|neighbourhood|quarter"]({south},{west},{north},{east});
+          nwr["leisure"="park"]({south},{west},{north},{east});
+        );
+        out center tags;
+        """
+        try:
+            response = requests.post(
+                "https://overpass-api.de/api/interpreter",
+                data=query,
+                headers={"User-Agent": "EcoStride/1.0"},
+                timeout=12,
+            )
+            if response.status_code != 200:
+                return []
+            places = []
+            for element in response.json().get("elements", []):
+                tags = element.get("tags", {})
+                name = tags.get("name")
+                center = element.get("center", {})
+                place_lat = element.get("lat", center.get("lat"))
+                place_lon = element.get("lon", center.get("lon"))
+                if not name or place_lat is None or place_lon is None:
+                    continue
+                if tags.get("amenity") in ("college", "university"):
+                    category = "College / University"
+                elif tags.get("amenity") == "school":
+                    category = "School"
+                elif tags.get("leisure") == "park":
+                    category = "Park"
+                else:
+                    category = "Neighbourhood"
+                places.append({
+                    "name": name,
+                    "lat": float(place_lat),
+                    "lon": float(place_lon),
+                    "category": category,
+                    "factor": 1.0,
+                    "pm_extra": 0,
+                    "no2_extra": 0,
+                })
+            return places[:250]
+        except Exception as error:
+            print(f"OSM viewport discovery error: {error}")
+            return []
+
+    def get_locations_for_city(self, city_name, lat, lon, radius_km=30, bounds=None):
         """Discovers 100% actual, real-world monitoring stations (WAQI/CPCB) and real suburbs (OSM).
         Never creates synthetic or fake names."""
-        cache_key = f"locations_{city_name}_{lat:.4f}_{lon:.4f}_{radius_km}"
+        bounds_key = "_".join(f"{bounds[key]:.3f}" for key in ('south', 'west', 'north', 'east')) if bounds else "all"
+        cache_key = f"locations_{city_name}_{lat:.4f}_{lon:.4f}_{radius_km}_{bounds_key}"
         if self._is_cache_valid(cache_key, ttl=86400):
             return self._cache[cache_key]
 
@@ -500,6 +559,9 @@ class AQIForecaster:
                 {"name": "Kharadi", "lat": 18.5513, "lon": 73.9417, "category": "IT / Residential", "factor": 1.05, "pm_extra": 3, "no2_extra": 2},
                 {"name": "Vishrantwadi", "lat": 18.5726, "lon": 73.8783, "category": "Residential Suburb", "factor": 1.06, "pm_extra": 4, "no2_extra": 3}
             ]
+            discovered = self._discover_osm_places(bounds)
+            known_names = {item['name'].lower() for item in pune_actual}
+            pune_actual.extend(item for item in discovered if item['name'].lower() not in known_names)
             self._cache[cache_key] = pune_actual
             self._cache_time[cache_key] = datetime.datetime.now()
             return pune_actual
@@ -511,7 +573,7 @@ class AQIForecaster:
             return DEFAULT_COLONIES
 
         # ── 3. Dynamic Real Location Discovery for ANY City Across India ──
-        actual_locations = []
+        actual_locations = self._discover_osm_places(bounds)
 
         # Step 3A: Discover official government physical monitoring stations via WAQI API
         try:
@@ -591,13 +653,14 @@ class AQIForecaster:
         self._cache_time[cache_key] = datetime.datetime.now()
         return actual_locations
 
-    def get_colony_pins(self, lat=DEFAULT_LAT, lon=DEFAULT_LON, city_name="Pune"):
-        cache_key = f"colony_pins_{lat:.4f}_{lon:.4f}_{city_name}"
+    def get_colony_pins(self, lat=DEFAULT_LAT, lon=DEFAULT_LON, city_name="Pune", bounds=None):
+        bounds_key = "_".join(f"{bounds[key]:.3f}" for key in ('south', 'west', 'north', 'east')) if bounds else "all"
+        cache_key = f"colony_pins_{lat:.4f}_{lon:.4f}_{city_name}_{bounds_key}"
         if self._is_cache_valid(cache_key, ttl=300):
             return self._cache[cache_key]
 
         # Fetch actual real locations dynamically
-        locations = self.get_locations_for_city(city_name, lat, lon)
+        locations = self.get_locations_for_city(city_name, lat, lon, bounds=bounds)
 
         pins = []
         # Get live baseline data for accurate scaling
