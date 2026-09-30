@@ -20,17 +20,11 @@ L.Icon.Default.mergeOptions({
 async function searchPlaces(query) {
   if (!query || query.length < 3) return [];
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6`;
-    const res = await fetch(url, {
-      headers: { "Accept-Language": "en", "User-Agent": "EcoStride/1.0" },
+    const res = await axios.get(`${API_BASE_URL}/api/places/search`, {
+      params: { q: query },
+      timeout: 7000,
     });
-    const data = await res.json();
-    return data.map((item) => ({
-      name: item.display_name.split(",")[0],
-      display: item.display_name,
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-    }));
+    return res.data.places || [];
   } catch (e) {
     console.error("Suggestion error:", e);
     return [];
@@ -88,18 +82,12 @@ const Routing = () => {
       const controller = new AbortController();
       suggestAborts.current[type] = controller;
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&limit=6&addressdetails=0`;
-        const res = await fetch(url, {
+        const response = await axios.get(`${API_BASE_URL}/api/places/search`, {
+          params: { q: val },
+          timeout: 7000,
           signal: controller.signal,
-          headers: { "Accept-Language": "en", "User-Agent": "EcoStride/1.0" },
         });
-        const data = await res.json();
-        const results = data.map((item) => ({
-          name: item.display_name.split(",")[0],
-          display: item.display_name,
-          lat: parseFloat(item.lat),
-          lon: parseFloat(item.lon),
-        }));
+        const results = response.data.places || [];
         setSuggestions((prev) => ({ ...prev, [type]: results }));
       } catch (e) {
         if (e.name !== "AbortError") {

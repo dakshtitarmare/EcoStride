@@ -204,6 +204,39 @@ def get_map_pins():
     pins = forecaster.get_colony_pins(lat, lon, city, bounds=bounds)
     return jsonify({"status": "success", "pins": pins})
 
+@app.route('/api/places/search', methods=['GET'])
+def search_places():
+    query = request.args.get('q', '').strip()
+    if len(query) < 3:
+        return jsonify({"status": "success", "places": []})
+
+    try:
+        import requests as req
+        response = req.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={
+                'q': f'{query}, India',
+                'format': 'jsonv2',
+                'limit': 6,
+                'addressdetails': 1,
+            },
+            headers={'User-Agent': 'EcoStride/1.0 (place-search)'},
+            timeout=5,
+        )
+        response.raise_for_status()
+        places = []
+        for item in response.json():
+            places.append({
+                'name': item.get('display_name', '').split(',')[0],
+                'display': item.get('display_name', ''),
+                'lat': float(item['lat']),
+                'lon': float(item['lon']),
+            })
+        return jsonify({"status": "success", "places": places})
+    except (ValueError, TypeError, req.RequestException) as error:
+        print(f"Place search error: {error}")
+        return jsonify({"status": "success", "places": []})
+
 # --- Health Advisory Endpoints ---
 @app.route('/api/health/advisory', methods=['POST'])
 def get_advisory():
