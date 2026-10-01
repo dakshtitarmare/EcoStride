@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { Loader, ShieldCheck, AlertTriangle } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import '../styles/AdminDashboard.css';
+import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -38,59 +40,26 @@ const AdminLogin = () => {
 
     setLoading(true);
     try {
-      // const admins = await getAdmins();
-
-      // if (!admins) {
-      //   setError('Invalid admin credentials');
-      //   return;
-      // }
-
-      // // Check against all entries in the `admins` node
-      // const matched = Object.values(admins).find(
-      //   (admin) =>
-      //     admin.username === username.trim() &&
-      //     admin.password === password
-      // );
-
-      // if (matched) {
-      //   // Store session
-      //   localStorage.setItem(
-      //     'adminSession',
-      //     JSON.stringify({
-      //       username: matched.username,
-      //       loggedInAt: new Date().toISOString(),
-      //     })
-      //   );
-      //   navigate('/admin', { replace: true });
-      // } else {
-      //   setError('Invalid admin credentials');
-      // }
-
-      const admins = await getAdmins();
-
-if (!admins) {
-    setError('Invalid admin credentials');
-    return;
-}
-
-const matched = Object.values(admins).find(
-    (admin) =>
-        admin.username === username.trim() &&
-        admin.password === password
+      const response = await axios.post(
+  `${API_BASE_URL}/api/auth/admin-login`,
+  {
+    username: username.trim(),
+    password
+  }
 );
 
-if (matched) {
-    localStorage.setItem(
-        'adminSession',
-        JSON.stringify({
-            username: matched.username,
-            loggedInAt: new Date().toISOString(),
-        })
-    );
+if (response.data.status === 'success') {
+  localStorage.setItem(
+    'adminSession',
+    JSON.stringify({
+      username: response.data.admin.username,
+      loggedInAt: new Date().toISOString()
+    })
+  );
 
-    navigate('/admin', { replace: true });
+  navigate('/admin', { replace: true });
 } else {
-    setError('Invalid admin credentials');
+  setError('Invalid admin credentials');
 }
     } catch (err) {
       console.error('Admin login error:', err);
