@@ -261,6 +261,37 @@ def get_advisory():
         "advisory":        advice,
     })
 
+@app.route('/api/health/chat', methods=['POST'])
+def health_chat():
+    data = request.json or {}
+    question = str(data.get('message', '')).strip()
+    if not question:
+        return jsonify({"status": "error", "message": "A question is required"}), 400
+
+    profile = data.get('profile', {})
+    city = profile.get('location', 'Pune')
+    try:
+        lat = float(profile.get('lat', 18.5204))
+        lon = float(profile.get('lon', 73.8567))
+    except (TypeError, ValueError):
+        lat, lon = 18.5204, 73.8567
+
+    current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    context = {
+        "city": city,
+        "latitude": lat,
+        "longitude": lon,
+        "aqi": current.get('aqi'),
+        "category": current.get('category'),
+        "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
+        "age": profile.get('age'),
+        "conditions": profile.get('conditions', 'None reported'),
+        "activity": profile.get('activity', 'Moderate'),
+        "allergies": profile.get('allergies', ''),
+    }
+    answer = advisor.answer_gemini_question(question, context, data.get('history', []))
+    return jsonify({"status": "success", "answer": answer, "context": context})
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json or {}

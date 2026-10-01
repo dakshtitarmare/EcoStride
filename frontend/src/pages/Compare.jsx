@@ -8,22 +8,55 @@ import autoTable from "jspdf-autotable";
 const Compare = () => {
   const [city1, setCity1] = useState("");
   const [city2, setCity2] = useState("");
+  const [city1Location, setCity1Location] = useState(null);
+  const [city2Location, setCity2Location] = useState(null);
+  const [suggestions, setSuggestions] = useState({ city1: [], city2: [] });
   const [data1, setData1] = useState(null);
   const [data2, setData2] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+
+  const searchCities = async (field, value) => {
+    const setter = field === "city1" ? setCity1 : setCity2;
+    const locationSetter = field === "city1" ? setCity1Location : setCity2Location;
+    setter(value);
+    locationSetter(null);
+
+    if (value.trim().length < 3) {
+      setSuggestions((current) => ({ ...current, [field]: [] }));
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/places/search`, {
+        params: { q: value.trim() },
+      });
+      setSuggestions((current) => ({ ...current, [field]: response.data.places || [] }));
+    } catch (error) {
+      console.error("City search failed:", error);
+      setSuggestions((current) => ({ ...current, [field]: [] }));
+    }
+  };
+
+  const selectCity = (field, place) => {
+    const setter = field === "city1" ? setCity1 : setCity2;
+    const locationSetter = field === "city1" ? setCity1Location : setCity2Location;
+    setter(place.name);
+    locationSetter(place);
+    setSuggestions((current) => ({ ...current, [field]: [] }));
+  };
 
   const handleCompare = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const [res1, res2] = await Promise.all([
-        axios.get(
-          `${API_BASE_URL}/api/forecast/current?city=${encodeURIComponent(city1)}`,
-        ),
-        axios.get(
-          `${API_BASE_URL}/api/forecast/current?city=${encodeURIComponent(city2)}`,
-        ),
+        axios.get(`${API_BASE_URL}/api/forecast/current`, {
+          params: { city: city1, lat: city1Location.lat, lon: city1Location.lon },
+        }),
+        axios.get(`${API_BASE_URL}/api/forecast/current`, {
+          params: { city: city2, lat: city2Location.lat, lon: city2Location.lon },
+        }),
       ]);
 
       const d1 = res1.data.data;
@@ -32,13 +65,13 @@ const Compare = () => {
       const [hist1, hist2] = await Promise.all([
         axios.post(`${API_BASE_URL}/api/forecast/predict`, {
           city: city1,
-          lat: d1.lat,
-          lon: d1.lon,
+          lat: city1Location.lat,
+          lon: city1Location.lon,
         }),
         axios.post(`${API_BASE_URL}/api/forecast/predict`, {
           city: city2,
-          lat: d2.lat,
-          lon: d2.lon,
+          lat: city2Location.lat,
+          lon: city2Location.lon,
         }),
       ]);
 
@@ -230,37 +263,53 @@ const Compare = () => {
 
       {/* ── Input Form ── */}
       <div className="card">
-        <form
-          onSubmit={handleCompare}
-          style={{ display: "flex", gap: "16px", alignItems: "flex-end" }}
-        >
-          <div style={{ flex: 1 }}>
+        <form onSubmit={handleCompare} className="compare-city-form">
+          <div className="compare-city-field">
             <label className="text-muted">City 1</label>
             <input
               value={city1}
-              onChange={(e) => setCity1(e.target.value)}
-              placeholder="Enter City 1"
+              onChange={(e) => searchCities("city1", e.target.value)}
+              placeholder="Search a city in India"
               required
             />
+            {suggestions.city1.length > 0 && (
+              <div className="compare-city-suggestions">
+                {suggestions.city1.map((place) => (
+                  <button type="button" key={`${place.name}-${place.lat}-${place.lon}`} onMouseDown={() => selectCity("city1", place)}>
+                    <strong>{place.name}</strong><span>{place.display}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="compare-city-field">
             <label className="text-muted">City 2</label>
             <input
               value={city2}
-              onChange={(e) => setCity2(e.target.value)}
-              placeholder="Enter City 2"
+              onChange={(e) => searchCities("city2", e.target.value)}
+              placeholder="Search a city in India"
               required
             />
+            {suggestions.city2.length > 0 && (
+              <div className="compare-city-suggestions">
+                {suggestions.city2.map((place) => (
+                  <button type="button" key={`${place.name}-${place.lat}-${place.lon}`} onMouseDown={() => selectCity("city2", place)}>
+                    <strong>{place.name}</strong><span>{place.display}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button
             type="submit"
             className="btn-primary"
-            disabled={loading}
+            disabled={loading || !city1Location || !city2Location}
             style={{ height: "46px", width: "120px" }}
           >
             {loading ? "Loading..." : "Compare"}
           </button>
         </form>
+        <p className="compare-city-help">Select a suggested place for both cities so EcoStride uses the exact map coordinates.</p>
       </div>
 
       {/* ── Results Grid ── */}

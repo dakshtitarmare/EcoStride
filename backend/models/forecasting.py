@@ -557,7 +557,21 @@ class AQIForecaster:
                 {"name": "Dhanori", "lat": 18.5907, "lon": 73.8913, "category": "Residential Suburb", "factor": 1.04, "pm_extra": 3, "no2_extra": 2},
                 {"name": "Yerawada", "lat": 18.5587, "lon": 73.8955, "category": "Urban Suburb", "factor": 1.08, "pm_extra": 5, "no2_extra": 4},
                 {"name": "Kharadi", "lat": 18.5513, "lon": 73.9417, "category": "IT / Residential", "factor": 1.05, "pm_extra": 3, "no2_extra": 2},
-                {"name": "Vishrantwadi", "lat": 18.5726, "lon": 73.8783, "category": "Residential Suburb", "factor": 1.06, "pm_extra": 4, "no2_extra": 3}
+                {"name": "Vishrantwadi", "lat": 18.5726, "lon": 73.8783, "category": "Residential Suburb", "factor": 1.06, "pm_extra": 4, "no2_extra": 3},
+                {"name": "G H Raisoni College, Wagholi", "lat": 18.5732358, "lon": 73.9814749, "category": "College / University", "factor": 1.08, "pm_extra": 4, "no2_extra": 3},
+                {"name": "Wagholi", "lat": 18.5806299, "lon": 73.9833099, "category": "Residential Suburb", "factor": 1.10, "pm_extra": 5, "no2_extra": 4},
+                {"name": "Keshav Nagar", "lat": 18.5368, "lon": 73.9316, "category": "Residential Suburb", "factor": 1.06, "pm_extra": 3, "no2_extra": 2},
+                {"name": "Mundhwa", "lat": 18.5298, "lon": 73.9367, "category": "Urban Suburb", "factor": 1.12, "pm_extra": 6, "no2_extra": 4},
+                {"name": "COEP Technological University", "lat": 18.5293, "lon": 73.8560, "category": "College / University", "factor": 1.04, "pm_extra": 2, "no2_extra": 2},
+                {"name": "Savitribai Phule Pune University", "lat": 18.5453, "lon": 73.8077, "category": "College / University", "factor": 0.90, "pm_extra": -4, "no2_extra": -3},
+                {"name": "Fergusson College", "lat": 18.5236, "lon": 73.8403, "category": "College / University", "factor": 0.98, "pm_extra": 0, "no2_extra": 1},
+                {"name": "Symbiosis International University", "lat": 18.5333169, "lon": 73.8335802, "category": "College / University", "factor": 0.92, "pm_extra": -3, "no2_extra": -2},
+                {"name": "MIT World Peace University", "lat": 18.5184086, "lon": 73.8155543, "category": "College / University", "factor": 0.94, "pm_extra": -2, "no2_extra": -1},
+                {"name": "Vishwakarma Institute of Technology", "lat": 18.4597, "lon": 73.8662, "category": "College / University", "factor": 1.02, "pm_extra": 2, "no2_extra": 2},
+                {"name": "Bharati Vidyapeeth University", "lat": 18.4582, "lon": 73.8500, "category": "College / University", "factor": 0.98, "pm_extra": 0, "no2_extra": 1},
+                {"name": "DY Patil Institute, Akurdi", "lat": 18.6507, "lon": 73.7647, "category": "College / University", "factor": 1.08, "pm_extra": 5, "no2_extra": 4},
+                {"name": "Pimpri", "lat": 18.6298, "lon": 73.7997, "category": "Urban Suburb", "factor": 1.18, "pm_extra": 9, "no2_extra": 6},
+                {"name": "Chinchwad", "lat": 18.6279, "lon": 73.7813, "category": "Urban Suburb", "factor": 1.16, "pm_extra": 8, "no2_extra": 6}
             ]
             discovered = self._discover_osm_places(bounds)
             known_names = {item['name'].lower() for item in pune_actual}

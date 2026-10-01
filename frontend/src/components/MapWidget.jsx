@@ -277,6 +277,7 @@ const MapViewportWatcher = ({ onViewportChange }) => {
     };
 
     map.on("moveend", handleMoveEnd);
+    handleMoveEnd();
     return () => map.off("moveend", handleMoveEnd);
   }, [map, onViewportChange]);
 
