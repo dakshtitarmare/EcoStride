@@ -1,0 +1,48 @@
+.health-advisory-page { display: flex; flex-direction: column; gap: 24px; }
+.health-advisory-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.health-advisory-eyebrow, .health-card-label { display: flex; align-items: center; gap: 7px; color: var(--accent); font: 600 11px var(--font-mono); letter-spacing: .08em; }
+.health-advisory-header h1 { margin: 7px 0 4px; font: 700 clamp(1.5rem, 3vw, 2rem) var(--font-display); }
+.health-advisory-header p, .health-location, .health-disclaimer { color: var(--text-secondary); font-size: 13px; }
+.health-refresh-button { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text-primary); background: var(--bg-card); cursor: pointer; font: 500 13px var(--font-body); }
+.health-refresh-button:disabled { opacity: .55; cursor: wait; }
+.health-spin { animation: health-spin 1s linear infinite; }
+@keyframes health-spin { to { transform: rotate(360deg); } }
+.health-summary-grid, .health-content-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.health-content-grid { grid-template-columns: minmax(0, 1.45fr) minmax(260px, .75fr); align-items: start; }
+.health-aqi-card, .health-risk-card { min-height: 154px; display: flex; flex-direction: column; gap: 8px; }
+.health-aqi-card strong { font: 700 50px var(--font-mono); line-height: 1; }
+.health-aqi-category { color: var(--text-primary); font: 600 14px var(--font-display); }
+.health-risk-value { display: flex; align-items: baseline; gap: 10px; margin-top: 11px; }
+.health-risk-value strong { font: 700 25px var(--font-display); color: var(--text-primary); }
+.health-risk-value span { color: var(--text-secondary); font: 12px var(--font-mono); }
+.health-risk-bar { height: 7px; overflow: hidden; border-radius: 4px; background: var(--bg-base); }
+.health-risk-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .5s ease; }
+.health-advice-card, .health-profile-card, .health-pollutants-card { padding: 20px; }
+.health-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--text-primary); font: 700 15px var(--font-display); }
+.health-section-title svg { color: var(--accent); }
+.health-advice-text { white-space: pre-wrap; color: var(--text-primary); font-size: 15px; line-height: 1.7; }
+.health-disclaimer { margin-top: 22px; padding-top: 13px; border-top: 1px solid var(--border); font-size: 11px; line-height: 1.5; }
+.health-chat-card { width: 100%; padding: 20px; }
+.health-chat-messages { display: flex; flex-direction: column; gap: 12px; height: 280px; overflow-y: auto; margin-bottom: 14px; padding: 4px 3px 4px 0; }
+.health-chat-message { max-width: 82%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.health-chat-message.user { align-self: flex-end; border-color: var(--accent-glow); color: var(--bg-base); background: var(--accent); }
+.health-chat-message.assistant { align-self: flex-start; background: var(--bg-base); }
+.health-chat-role { display: block; margin-bottom: 4px; color: var(--text-secondary); font: 600 10px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.health-chat-message.user .health-chat-role { color: rgba(6, 32, 24, .7); }
+.health-thinking { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); }
+.health-thinking span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: health-chat-dot 1s infinite alternate; }
+.health-thinking span:nth-child(2) { animation-delay: .2s; }
+.health-thinking span:nth-child(3) { animation-delay: .4s; }
+.health-thinking em { margin-left: 5px; font-style: normal; font-size: 12px; }
+@keyframes health-chat-dot { to { opacity: .25; transform: translateY(-2px); } }
+.health-chat-form { display: flex; gap: 8px; }
+.health-chat-form input { min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; color: var(--text-primary); background: var(--bg-base); outline: none; font: 13px var(--font-body); }
+.health-chat-form input:focus { border-color: var(--accent); }
+.health-chat-form button { display: grid; place-items: center; width: 40px; border: 0; border-radius: 7px; color: var(--bg-base); background: var(--accent); cursor: pointer; }
+.health-chat-form button:disabled { cursor: not-allowed; opacity: .45; }
+.health-side-column { display: flex; flex-direction: column; gap: 16px; }
+.health-profile-row, .health-pollutant-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 13px; }
+.health-profile-row strong, .health-pollutant-row strong { max-width: 65%; color: var(--text-primary); text-align: right; }
+.health-error { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border: 1px solid rgba(255,79,107,.3); border-radius: 8px; color: var(--aqi-unhealthy); background: rgba(255,79,107,.08); font-size: 13px; }
+.health-loading { min-height: 220px; display: grid; place-items: center; color: var(--text-secondary); }
+@media (max-width: 760px) { .health-advisory-header, .health-summary-grid, .health-content-grid { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; } .health-refresh-button { align-self: flex-start; } }

@@ -57,7 +57,7 @@ class HealthAdvisor:
         }
 
     def generate_advisory(self, profile, current_aqi):
-        """Routes to either local Ollama or Groq API based on config"""
+        """Generate Health Advisory guidance with Gemini only."""
         
         # Determine strict structure for system prompt
         prompt = f"""
@@ -74,12 +74,40 @@ class HealthAdvisor:
         Be concise, use bullet points.
         """
         
-        if USE_LOCAL_LLM:
-            return self._generate_ollama_advisory(prompt)
-        elif GROQ_API_KEY and GROQ_API_KEY != "your_free_key_here":
-            return self._generate_groq_advisory(prompt)
-        else:
+        if GEMINI_API_KEY and GEMINI_API_KEY != "your_api_key_here":
+            gemini_answer = self._generate_gemini_chat(prompt)
+            if gemini_answer:
+                return gemini_answer
             return self._generate_fallback_advisory(profile, current_aqi)
+        return self._generate_fallback_advisory(profile, current_aqi)
+
+    def answer_gemini_question(self, question, context, history=None):
+        """Answer every Health Advisory question using Gemini and live app context."""
+        conversation = history or []
+        prompt = f"""
+You are EcoStride's helpful health and air-quality assistant. Answer every user question directly,
+including questions about health precautions, AQI, pollutants, exercise, indoor air, the user's
+profile, forecasts, routes, or any other topic. Use the live application context below whenever
+the question relates to EcoStride. If a fact is not present in the context, say that clearly rather
+than inventing live measurements. Be concise, practical, and clear.
+
+Never diagnose illness, prescribe medication, or replace a doctor. For urgent or severe symptoms,
+recommend immediate professional medical care. For general non-medical questions, answer helpfully
+and distinguish general knowledge from live EcoStride data.
+
+Health Advisory context:
+{json.dumps(context, indent=2, default=str)}
+
+Recent conversation:
+{json.dumps(conversation, indent=2, default=str)}
+
+User question: {question}
+"""
+        if GEMINI_API_KEY and GEMINI_API_KEY != "your_api_key_here":
+            answer = self._generate_gemini_chat(prompt)
+            if answer:
+                return answer
+        return self._generate_fallback_chat(question, context)
 
     def answer_chat_question(self, question, context):
         """Answer a user question using the current application data."""

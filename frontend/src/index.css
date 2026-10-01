@@ -1312,6 +1312,19 @@ select option {
   }
 }
 
+/* ── City comparison search ── */
+.compare-city-form { display: flex; gap: 16px; align-items: flex-end; }
+.compare-city-field { position: relative; flex: 1; min-width: 0; }
+.compare-city-field input { width: 100%; }
+.compare-city-suggestions { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); box-shadow: 0 12px 28px rgba(0, 0, 0, .35); }
+.compare-city-suggestions button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 3px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--border); color: var(--text-primary); background: transparent; text-align: left; cursor: pointer; }
+.compare-city-suggestions button:last-child { border-bottom: 0; }
+.compare-city-suggestions button:hover { background: var(--accent-dim); }
+.compare-city-suggestions strong { font: 600 13px var(--font-body); }
+.compare-city-suggestions span { overflow: hidden; width: 100%; color: var(--text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.compare-city-help { margin: 10px 0 0; color: var(--text-muted); font: 11px var(--font-mono); }
+@media (max-width: 768px) { .compare-city-form { flex-direction: column; align-items: stretch; } .compare-city-form .btn-primary { width: 100% !important; } }
+
 /* ── Fullscreen Map (Routing) ── */
 .map-tap-hint {
   display: none;

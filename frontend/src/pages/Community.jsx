@@ -3,6 +3,8 @@ import axios from "axios";
 import { useLocation } from "../hooks/useLocation";
 import { API_BASE_URL } from "../apiConfig";
 import jsPDF from "jspdf";
+import { AlertTriangle, FileDown, Megaphone, Plus, RefreshCw, Send, X } from "lucide-react";
+import "../styles/Community.css";
 
 const Community = () => {
   const { location } = useLocation();
@@ -210,9 +212,9 @@ const Community = () => {
   };
 
   return (
-    <div className="grid grid-cols-12">
+    <div className="community-page grid grid-cols-12">
       {/* ── Community Messages ── */}
-      <div className="col-span-12 card" style={{ marginBottom: "24px" }}>
+      <div className="community-announcements col-span-12 card">
         <div
           style={{
             display: "flex",
@@ -224,7 +226,7 @@ const Community = () => {
         >
           <div style={{ flex: 1 }}>
             <h2 style={{ marginBottom: "4px" }}>
-              📢 Community Announcements & Messages
+              <Megaphone size={20} /> Community Announcements
             </h2>
             <p className="text-muted" style={{ margin: 0 }}>
               Important updates and community discussions.
@@ -243,7 +245,7 @@ const Community = () => {
               alignItems: "center",
             }}
           >
-            {showMessageForm ? "Cancel" : "+ Post Message"}
+            {showMessageForm ? <><X size={15} /> Cancel</> : <><Plus size={15} /> Post Message</>}
           </button>
         </div>
 
@@ -430,12 +432,51 @@ const Community = () => {
         )}
       </div>
 
+      {/* ── Report Form ── */}
+      <div className="community-report-form card">
+        <div className="community-card-heading">
+          <div>
+            <h2><AlertTriangle size={19} /> Report an Issue</h2>
+            <p className="text-muted">Help people in {location.city} understand local pollution.</p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="community-form-fields">
+          <label>
+            Issue type
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="fire">Fire / burning</option>
+              <option value="dust">Heavy dust</option>
+              <option value="smoke">Industrial smoke</option>
+              <option value="smell">Unusual smell</option>
+              <option value="other">Other pollution</option>
+            </select>
+          </label>
+          <label>
+            Details <span>(optional)</span>
+            <textarea
+              rows="3"
+              placeholder="What did you notice and where?"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </label>
+          <button type="submit" className="btn-primary" disabled={loading}>
+            <Send size={15} /> {loading ? "Submitting..." : "Submit Report"}
+          </button>
+        </form>
+      </div>
+
       {/* ── Reports List ── */}
-      <div className="col-span-8 card">
-        <h2>Community Reports in {location.city}</h2>
-        <p className="text-muted" style={{ marginBottom: "24px" }}>
-          Live pollution reports from the community. Auto-expires after 4 hours.
-        </p>
+      <div className="community-reports card">
+        <div className="community-card-heading">
+          <div>
+            <h2>Reports near {location.city}</h2>
+            <p className="text-muted">Recent reports are visible for four hours.</p>
+          </div>
+          <button className="community-icon-button" onClick={fetchReports} title="Refresh reports" aria-label="Refresh reports">
+            <RefreshCw size={16} />
+          </button>
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {reports.length === 0 && (
@@ -463,9 +504,7 @@ const Community = () => {
                 }}
               >
                 <span style={{ fontSize: "1.5rem" }}>{getEmoji(r.type)}</span>
-                <strong style={{ textTransform: "capitalize" }}>
-                  {r.type} Detected
-                </strong>
+                  <strong style={{ textTransform: "capitalize" }}>{r.type} reported</strong>
                 {r.notified && (
                   <span
                     style={{
@@ -507,7 +546,7 @@ const Community = () => {
                   className="btn-secondary"
                   style={{ padding: "4px 8px", fontSize: "0.75rem" }}
                 >
-                  📥 Download PDF
+                  <FileDown size={14} /> Download
                 </button>
               </div>
             </div>
@@ -515,61 +554,6 @@ const Community = () => {
         </div>
       </div>
 
-      {/* ── Report Form (commented out) ── */}
-      {/* <div className="col-span-4 card">
-        <h3 style={{ marginBottom: "16px" }}>Report an Issue</h3>
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-        >
-          <div>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.9rem",
-                color: "var(--text-secondary)",
-              }}
-            >
-              Issue Type
-            </label>
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-            >
-              <option value="fire">Fire / Burning (🔥)</option>
-              <option value="dust">Heavy Dust (💨)</option>
-              <option value="smoke">Industrial Smoke (🏭)</option>
-              <option value="smell">Unusual Smell (🤢)</option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.9rem",
-                color: "var(--text-secondary)",
-              }}
-            >
-              Description (optional)
-            </label>
-            <textarea
-              rows="3"
-              placeholder="E.g., Huge tire fire near the highway..."
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-            />
-          </div>
-
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Submitting..." : "Submit Report"}
-          </button>
-        </form>
-      </div> */}
     </div>
   );
 };

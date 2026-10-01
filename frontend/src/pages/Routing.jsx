@@ -46,7 +46,7 @@ const Routing = () => {
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const isNavigating = false; // Kept as constant for MapWidget compat
   const [userPos, setUserPos] = useState(null);
-  const [travelMode, setTravelMode] = useState("driving");
+  const travelMode = "driving";
   const hasCalculated = useRef(false);
 
   // Close on Escape key
@@ -271,30 +271,6 @@ const Routing = () => {
           <p className="text-muted" style={{ fontSize: "0.82rem" }}>
             Plan dynamic, healthy paths anywhere in India.
           </p>
-        </div>
-
-        {/* Travel mode */}
-        <div style={{ display: "flex", gap: "8px" }}>
-          {["driving", "walking", "cycling"].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setTravelMode(m)}
-              className={travelMode === m ? "btn-primary" : "btn-secondary"}
-              style={{
-                flex: 1,
-                padding: "6px",
-                fontSize: "0.75rem",
-                borderRadius: "14px",
-              }}
-            >
-              {m === "cycling"
-                ? "🚲 Bike"
-                : m === "walking"
-                  ? "🚶 Walk"
-                  : "🚗 Drive"}
-            </button>
-          ))}
         </div>
 
         {/* Form */}

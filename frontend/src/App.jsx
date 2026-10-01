@@ -22,6 +22,7 @@ import CommunityMessageAdmin from './pages/CommunityMessageAdmin';
 import CommunityReportsAdmin from './pages/CommunityReportsAdmin';
 import AccountBlocked from './pages/AccountBlocked';
 import AlertSettings from './pages/AlertSettings';
+import HealthAdvisory from './pages/HealthAdvisory';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
             <Route path="routing" element={<Routing />} />
             <Route path="policy" element={<Policy />} />
             <Route path="safe-zones" element={<SafeZones />} />
+            <Route path="health-advisory" element={<HealthAdvisory />} />
             <Route path="compare" element={<Compare />} />
             <Route path="community" element={<Community />} />
             <Route path="alerts" element={<AlertSettings />} />
