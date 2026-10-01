@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAdmins } from '../utils/firebase';
+// import { getAdmins } from '../utils/firebase';
 import { Loader, ShieldCheck, AlertTriangle } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import '../styles/AdminDashboard.css';
@@ -38,33 +38,60 @@ const AdminLogin = () => {
 
     setLoading(true);
     try {
+      // const admins = await getAdmins();
+
+      // if (!admins) {
+      //   setError('Invalid admin credentials');
+      //   return;
+      // }
+
+      // // Check against all entries in the `admins` node
+      // const matched = Object.values(admins).find(
+      //   (admin) =>
+      //     admin.username === username.trim() &&
+      //     admin.password === password
+      // );
+
+      // if (matched) {
+      //   // Store session
+      //   localStorage.setItem(
+      //     'adminSession',
+      //     JSON.stringify({
+      //       username: matched.username,
+      //       loggedInAt: new Date().toISOString(),
+      //     })
+      //   );
+      //   navigate('/admin', { replace: true });
+      // } else {
+      //   setError('Invalid admin credentials');
+      // }
+
       const admins = await getAdmins();
 
-      if (!admins) {
-        setError('Invalid admin credentials');
-        return;
-      }
+if (!admins) {
+    setError('Invalid admin credentials');
+    return;
+}
 
-      // Check against all entries in the `admins` node
-      const matched = Object.values(admins).find(
-        (admin) =>
-          admin.username === username.trim() &&
-          admin.password === password
-      );
+const matched = Object.values(admins).find(
+    (admin) =>
+        admin.username === username.trim() &&
+        admin.password === password
+);
 
-      if (matched) {
-        // Store session
-        localStorage.setItem(
-          'adminSession',
-          JSON.stringify({
+if (matched) {
+    localStorage.setItem(
+        'adminSession',
+        JSON.stringify({
             username: matched.username,
             loggedInAt: new Date().toISOString(),
-          })
-        );
-        navigate('/admin', { replace: true });
-      } else {
-        setError('Invalid admin credentials');
-      }
+        })
+    );
+
+    navigate('/admin', { replace: true });
+} else {
+    setError('Invalid admin credentials');
+}
     } catch (err) {
       console.error('Admin login error:', err);
       setError('Something went wrong. Please try again.');
