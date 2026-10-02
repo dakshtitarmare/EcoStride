@@ -1316,6 +1316,6 @@ def delete_admin_report(report_id):
 
 
 if __name__ == '__main__':
-    from config import PORT, HOST, DEBUG
+    from backend.temp_config import PORT, HOST, DEBUG
     print(f"Starting Team-X project on http://{HOST}:{PORT}")
     app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)

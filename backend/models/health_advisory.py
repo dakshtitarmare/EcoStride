@@ -4,12 +4,12 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 try:
-    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 
 class HealthAdvisor:
     def __init__(self):

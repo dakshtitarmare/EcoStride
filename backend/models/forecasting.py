@@ -64,7 +64,7 @@ DEFAULT_COLONIES = [
     {"name": "MIDC Industrial Area", "lat": 20.9100, "lon": 77.7950},
 ]
 try:
-    from config import (
+    from backend.temp_config import (
         OPENWEATHER_API_KEY, AQICN_API_TOKEN, DATABASE_PATH,
         GOV_INDIA_API_KEY, GOV_INDIA_RESOURCE_ID
     )
@@ -72,7 +72,7 @@ except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import (
+    from backend.temp_config import (
         OPENWEATHER_API_KEY, AQICN_API_TOKEN, DATABASE_PATH,
         GOV_INDIA_API_KEY, GOV_INDIA_RESOURCE_ID
     )

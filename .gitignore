@@ -107,3 +107,4 @@ backend/local_storage/*.json
 local_storage/*.json
 
 eco-stride2026.json
+backend/temp_config.py

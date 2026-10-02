@@ -13,7 +13,7 @@ def verify():
         print("❌ requests NOT found")
         
     try:
-        from config import OPENWEATHER_API_KEY
+        from backend.temp_config import OPENWEATHER_API_KEY
         print("✅ config imported successfully")
     except ImportError:
         print("❌ config NOT found (Make sure you are running from project root)")
