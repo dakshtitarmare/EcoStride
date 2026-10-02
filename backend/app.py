@@ -36,6 +36,18 @@ CORS(app,
      resources={
          r"/api/*": {
              "origins": allowed_origins,
+             "origins": [
+                 "http://localhost:5173",
+                 "http://localhost:5173/login",
+                 "http://localhost:3000",
+                 "http://127.0.0.1:5173",
+                 "http://127.0.0.1:3000",
+                 "http://localhost:5000",
+                 "http://127.0.0.1:5000",
+		 "https://map-aqi.vercel.app/",
+                 "https://map-aqi.vercel.app",
+
+             ],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization"],
              "supports_credentials": True,
@@ -46,7 +58,6 @@ CORS(app,
 
 from backend.models.forecasting import AQIForecaster
 from backend.models.routing import RoutePlanner
-from backend.models.pune_locations import find_pune_location_in_text, find_pune_locations
 from backend.models.health_advisory import HealthAdvisor
 from backend.models.policy_analysis import PolicySimulator
 from backend.auth import (
@@ -211,17 +222,6 @@ def search_places():
     if len(query) < 3:
         return jsonify({"status": "success", "places": []})
 
-    curated_places = [
-        {
-            'name': location['name'],
-            'display': f"{location['name']}, Pune, Maharashtra",
-            'lat': float(location['lat']),
-            'lon': float(location['lon']),
-            'source': 'ecostride_curated',
-        }
-        for location in find_pune_locations(query)
-    ]
-
     try:
         import requests as req
         response = req.get(
@@ -236,24 +236,18 @@ def search_places():
             timeout=5,
         )
         response.raise_for_status()
-        places = list(curated_places)
-        seen = {(round(place['lat'], 5), round(place['lon'], 5)) for place in places}
+        places = []
         for item in response.json():
-            place = {
+            places.append({
                 'name': item.get('display_name', '').split(',')[0],
                 'display': item.get('display_name', ''),
                 'lat': float(item['lat']),
                 'lon': float(item['lon']),
-                'source': 'nominatim',
-            }
-            coordinate_key = (round(place['lat'], 5), round(place['lon'], 5))
-            if coordinate_key not in seen:
-                places.append(place)
-                seen.add(coordinate_key)
+            })
         return jsonify({"status": "success", "places": places})
     except (ValueError, TypeError, req.RequestException) as error:
         print(f"Place search error: {error}")
-        return jsonify({"status": "success", "places": curated_places})
+        return jsonify({"status": "success", "places": []})
 
 # --- Health Advisory Endpoints ---
 @app.route('/api/health/advisory', methods=['POST'])
@@ -294,23 +288,13 @@ def health_chat():
     except (TypeError, ValueError):
         lat, lon = 18.5204, 73.8567
 
-    requested_location = find_pune_location_in_text(question)
-    if requested_location:
-        current = forecaster.get_current(
-            location=requested_location['name'],
-            lat=requested_location['lat'],
-            lon=requested_location['lon'],
-        )
-    else:
-        current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    current = forecaster.get_current(location=city, lat=lat, lon=lon)
     context = {
         "city": city,
-        "location_name": requested_location['name'] if requested_location else city,
-        "latitude": current.get('lat', lat),
-        "longitude": current.get('lon', lon),
+        "latitude": lat,
+        "longitude": lon,
         "aqi": current.get('aqi'),
         "category": current.get('category'),
-        "source": current.get('source'),
         "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
         "age": profile.get('age'),
         "conditions": profile.get('conditions', 'None reported'),
@@ -334,23 +318,13 @@ def chat():
     except (TypeError, ValueError):
         lat, lon = 18.5204, 73.8567
 
-    requested_location = find_pune_location_in_text(question)
-    if requested_location:
-        current = forecaster.get_current(
-            location=requested_location['name'],
-            lat=requested_location['lat'],
-            lon=requested_location['lon'],
-        )
-    else:
-        current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    current = forecaster.get_current(location=city, lat=lat, lon=lon)
     context = {
         "city": city,
-        "location_name": requested_location['name'] if requested_location else city,
-        "latitude": current.get('lat', lat),
-        "longitude": current.get('lon', lon),
+        "latitude": lat,
+        "longitude": lon,
         "aqi": current.get('aqi'),
         "category": current.get('category'),
-        "source": current.get('source'),
         "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
     }
     answer = advisor.answer_chat_question(question, context)
@@ -1352,8 +1326,79 @@ def delete_admin_report(report_id):
         print(f"Error deleting report: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# --- Admin Login Endpoint ---
+@app.route('/api/auth/admin-login', methods=['POST'])
+def admin_login():
+    try:
+        from firebase_admin import db as rtdb
+
+        data = request.json or {}
+
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+
+        if not username or not password:
+            return jsonify({
+                "status": "error",
+                "message": "Username and password are required"
+            }), 400
+
+        # Try /admin first
+        admins = rtdb.reference('admin').get()
+
+        # Fallback to /admins
+        if not admins:
+            admins = rtdb.reference('admins').get()
+
+        if not admins:
+            return jsonify({
+                "status": "error",
+                "message": "No admin accounts found"
+            }), 401
+
+        # Expected Firebase structure:
+        # admin/
+        #   someKey/
+        #     username: "admin"
+        #     password: "..."
+        if isinstance(admins, dict):
+            admin_list = admins.values()
+        else:
+            admin_list = []
+
+        matched_admin = next(
+            (
+                admin for admin in admin_list
+                if isinstance(admin, dict)
+                and admin.get('username') == username
+                and admin.get('password') == password
+            ),
+            None
+        )
+
+        if not matched_admin:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid admin credentials"
+            }), 401
+
+        return jsonify({
+            "status": "success",
+            "message": "Admin login successful",
+            "admin": {
+                "username": matched_admin.get('username')
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"Admin login error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 
 if __name__ == '__main__':
-    from backend.temp_config import PORT, HOST, DEBUG
+    from config import PORT, HOST, DEBUG
     print(f"Starting Team-X project on http://{HOST}:{PORT}")
     app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)
