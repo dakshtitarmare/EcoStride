@@ -38,10 +38,7 @@ const Landing = () => {
       }
 
       // Step 2: Send token + firebase user to backend auth context
-      const backendResult = await backendSignIn(
-        googleResult.idToken,
-        googleResult.user
-      );
+      const backendResult = await backendSignIn(googleResult.idToken);
 
       if (!backendResult.success) {
         if (backendResult.blocked) {

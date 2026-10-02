@@ -494,7 +494,11 @@ const MapWidget = ({
         )}
 
         {!showHeatmap ? (
-          <MarkerClusterGroup chunkedLoading maxClusterRadius={40}>
+          <MarkerClusterGroup
+            chunkedLoading
+            maxClusterRadius={40}
+            disableClusteringAtZoom={15}
+          >
             {pins.map((pin) => (
               <Marker
                 key={pin.id || pin.name}

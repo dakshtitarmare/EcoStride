@@ -46,6 +46,7 @@ CORS(app,
 
 from backend.models.forecasting import AQIForecaster
 from backend.models.routing import RoutePlanner
+from backend.models.pune_locations import find_pune_location_in_text, find_pune_locations
 from backend.models.health_advisory import HealthAdvisor
 from backend.models.policy_analysis import PolicySimulator
 from backend.auth import (
@@ -210,6 +211,17 @@ def search_places():
     if len(query) < 3:
         return jsonify({"status": "success", "places": []})
 
+    curated_places = [
+        {
+            'name': location['name'],
+            'display': f"{location['name']}, Pune, Maharashtra",
+            'lat': float(location['lat']),
+            'lon': float(location['lon']),
+            'source': 'ecostride_curated',
+        }
+        for location in find_pune_locations(query)
+    ]
+
     try:
         import requests as req
         response = req.get(
@@ -224,18 +236,24 @@ def search_places():
             timeout=5,
         )
         response.raise_for_status()
-        places = []
+        places = list(curated_places)
+        seen = {(round(place['lat'], 5), round(place['lon'], 5)) for place in places}
         for item in response.json():
-            places.append({
+            place = {
                 'name': item.get('display_name', '').split(',')[0],
                 'display': item.get('display_name', ''),
                 'lat': float(item['lat']),
                 'lon': float(item['lon']),
-            })
+                'source': 'nominatim',
+            }
+            coordinate_key = (round(place['lat'], 5), round(place['lon'], 5))
+            if coordinate_key not in seen:
+                places.append(place)
+                seen.add(coordinate_key)
         return jsonify({"status": "success", "places": places})
     except (ValueError, TypeError, req.RequestException) as error:
         print(f"Place search error: {error}")
-        return jsonify({"status": "success", "places": []})
+        return jsonify({"status": "success", "places": curated_places})
 
 # --- Health Advisory Endpoints ---
 @app.route('/api/health/advisory', methods=['POST'])
@@ -276,13 +294,23 @@ def health_chat():
     except (TypeError, ValueError):
         lat, lon = 18.5204, 73.8567
 
-    current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    requested_location = find_pune_location_in_text(question)
+    if requested_location:
+        current = forecaster.get_current(
+            location=requested_location['name'],
+            lat=requested_location['lat'],
+            lon=requested_location['lon'],
+        )
+    else:
+        current = forecaster.get_current(location=city, lat=lat, lon=lon)
     context = {
         "city": city,
-        "latitude": lat,
-        "longitude": lon,
+        "location_name": requested_location['name'] if requested_location else city,
+        "latitude": current.get('lat', lat),
+        "longitude": current.get('lon', lon),
         "aqi": current.get('aqi'),
         "category": current.get('category'),
+        "source": current.get('source'),
         "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
         "age": profile.get('age'),
         "conditions": profile.get('conditions', 'None reported'),
@@ -306,13 +334,23 @@ def chat():
     except (TypeError, ValueError):
         lat, lon = 18.5204, 73.8567
 
-    current = forecaster.get_current(location=city, lat=lat, lon=lon)
+    requested_location = find_pune_location_in_text(question)
+    if requested_location:
+        current = forecaster.get_current(
+            location=requested_location['name'],
+            lat=requested_location['lat'],
+            lon=requested_location['lon'],
+        )
+    else:
+        current = forecaster.get_current(location=city, lat=lat, lon=lon)
     context = {
         "city": city,
-        "latitude": lat,
-        "longitude": lon,
+        "location_name": requested_location['name'] if requested_location else city,
+        "latitude": current.get('lat', lat),
+        "longitude": current.get('lon', lon),
         "aqi": current.get('aqi'),
         "category": current.get('category'),
+        "source": current.get('source'),
         "pollutants": {key: current.get(key) for key in ('pm2_5', 'pm10', 'no2', 'o3', 'so2', 'co')},
     }
     answer = advisor.answer_chat_question(question, context)
