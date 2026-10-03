@@ -58,6 +58,7 @@ CORS(app,
 
 from backend.models.forecasting import AQIForecaster
 from backend.models.routing import RoutePlanner
+from backend.models.pune_locations import find_pune_locations
 from backend.models.health_advisory import HealthAdvisor
 from backend.models.policy_analysis import PolicySimulator
 from backend.auth import (
@@ -222,6 +223,17 @@ def search_places():
     if len(query) < 3:
         return jsonify({"status": "success", "places": []})
 
+    curated_places = [
+        {
+            'name': location['name'],
+            'display': f"{location['name']}, Pune, Maharashtra",
+            'lat': float(location['lat']),
+            'lon': float(location['lon']),
+            'source': 'ecostride_curated',
+        }
+        for location in find_pune_locations(query)
+    ]
+
     try:
         import requests as req
         response = req.get(
@@ -236,18 +248,24 @@ def search_places():
             timeout=5,
         )
         response.raise_for_status()
-        places = []
+        places = list(curated_places)
+        seen = {(round(place['lat'], 5), round(place['lon'], 5)) for place in places}
         for item in response.json():
-            places.append({
+            place = {
                 'name': item.get('display_name', '').split(',')[0],
                 'display': item.get('display_name', ''),
                 'lat': float(item['lat']),
                 'lon': float(item['lon']),
-            })
+                'source': 'nominatim',
+            }
+            coordinate_key = (round(place['lat'], 5), round(place['lon'], 5))
+            if coordinate_key not in seen:
+                places.append(place)
+                seen.add(coordinate_key)
         return jsonify({"status": "success", "places": places})
     except (ValueError, TypeError, req.RequestException) as error:
         print(f"Place search error: {error}")
-        return jsonify({"status": "success", "places": []})
+        return jsonify({"status": "success", "places": curated_places})
 
 # --- Health Advisory Endpoints ---
 @app.route('/api/health/advisory', methods=['POST'])

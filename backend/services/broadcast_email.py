@@ -42,8 +42,10 @@ class EmergencyBroadcastService:
         """Initialize SMTP configuration from environment variables."""
         self.smtp_server = os.getenv('BROADCAST_SMTP_SERVER', 'smtp.gmail.com')
         self.smtp_port = int(os.getenv('BROADCAST_SMTP_PORT', 587))
-        self.sender_email = os.getenv('BROADCAST_EMAIL')
-        self.sender_password = os.getenv('BROADCAST_PASSWORD')
+        self.sender_email = os.getenv('BROADCAST_EMAIL') or os.getenv('SMTP_EMAIL')
+        self.sender_password = os.getenv('BROADCAST_PASSWORD') or os.getenv('SMTP_APP_PASSWORD')
+        if self.sender_password:
+            self.sender_password = ''.join(self.sender_password.split())
         self.sender_name = os.getenv('BROADCAST_SENDER_NAME', 'EcoStride Admin')
         
         # sender_email and sender_password are required for sending emails, but optional for preview

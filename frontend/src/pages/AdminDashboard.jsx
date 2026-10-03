@@ -196,7 +196,7 @@ const AdminDashboard = () => {
         showToast('error', resp.data.message || 'Failed to send test email');
       }
     } catch (err) {
-      showToast('error', 'Failed to send test email');
+      showToast('error', err.response?.data?.message || err.response?.data?.stats?.errors?.[0] || 'Failed to send test email');
       console.error('Test email error:', err);
     } finally {
       setTestSending(false);
