@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useLocation } from "../hooks/useLocation";
+import { useAuth } from "../context/AuthContext";
 import MapWidget from "../components/MapWidget";
 import { API_BASE_URL } from "../apiConfig";
+import { useAuth } from "../context/AuthContext";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -34,7 +36,12 @@ async function searchPlaces(query) {
 // ─────────────────────────────────────────────────────────────────
 const Routing = () => {
   const { location } = useLocation();
+  const { idToken, user } = useAuth();
   const [start, setStart] = useState("");
+  const [vehicleType, setVehicleType] = useState("petrol_car");
+  const [advancedBlocked, setAdvancedBlocked] = useState(false);
+  const [usageRemaining, setUsageRemaining] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [end, setEnd] = useState("");
   const [startCoords, setStartCoords] = useState(null);
   const [endCoords, setEndCoords] = useState(null);
@@ -159,7 +166,11 @@ const Routing = () => {
           start_name: startVal,
           end_name: endVal,
           mode: travelMode,
+      vehicleType,
+      idToken,
+      user,
           city: location.city,
+          vehicle_type: vehicleType,
         };
 
         // If choosing "My Location", send coordinates directly
@@ -185,9 +196,12 @@ const Routing = () => {
           payload.lon = userPos.lon;
         }
 
+        const headers = {};
+        if (idToken) headers.Authorization = `Bearer ${idToken}`;
         const res = await axios.post(
           `${API_BASE_URL}/api/route/calculate`,
           payload,
+          { headers }
         );
         if (
           res.data.status === "success" &&
@@ -196,6 +210,14 @@ const Routing = () => {
         ) {
           const fetchedRoutes = res.data.routes;
           setRoutes(fetchedRoutes);
+          if (res.data.advanced_analysis_blocked) {
+             setAdvancedBlocked(true);
+             if (!user) setShowUpgradeModal(true); // If not logged in, prompt to log in or upgrade
+             else setShowUpgradeModal(true);
+          } else {
+             setAdvancedBlocked(false);
+             setUsageRemaining(res.data.usage_remaining);
+          }
           // Default to Cleanest route (lowest AQI); backend sorts ascending so routes[0] is cleanest
           const cleanest =
             fetchedRoutes.find((r) => r.type === "cleanest") ||
@@ -220,6 +242,9 @@ const Routing = () => {
       start,
       end,
       travelMode,
+      vehicleType,
+      idToken,
+      user,
       userPos,
       startCoords,
       endCoords,
@@ -247,6 +272,25 @@ const Routing = () => {
   const useMyLocation = () => {
     if (userPos) setStart("My Location");
     else alert("GPS not yet available. Please allow location access.");
+  };
+
+  const nearbyIssue = userPos && selectedRoute?.communityIssues?.find((issue) => {
+    const dLat = (issue.lat - userPos.lat) * 111000;
+    const dLon = (issue.lon - userPos.lon) * 111000 * Math.cos((userPos.lat * Math.PI) / 180);
+    return Math.sqrt(dLat * dLat + dLon * dLon) <= 300;
+  });
+
+  const submitVerification = async (response) => {
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/community/reports/${nearbyIssue.id}/feedback`,
+        { response, lat: userPos.lat, lon: userPos.lon },
+        { headers: { Authorization: `Bearer ${idToken}` } },
+      );
+      setVerificationDismissed(true);
+    } catch (error) {
+      alert(error.response?.data?.message || "Verification could not be submitted.");
+    }
   };
 
   const centerLat = location.lat || userPos?.lat || 20.9343;
@@ -379,6 +423,45 @@ const Routing = () => {
             )}
           </div>
 
+          {/* Travel Mode & Vehicle */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: "0.78rem", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                Mode
+              </label>
+              <select
+                value={travelMode}
+                onChange={(e) => {
+                  setTravelMode(e.target.value);
+                  if (e.target.value !== 'driving') setVehicleType('none');
+                  else setVehicleType('petrol_car');
+                }}
+                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", borderRadius: "8px", fontSize: "0.9rem" }}
+              >
+                <option value="driving">Driving</option>
+                <option value="foot">Walking/Jogging</option>
+              </select>
+            </div>
+            
+            {travelMode === 'driving' && (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: "0.78rem", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                  Vehicle
+                </label>
+                <select
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", borderRadius: "8px", fontSize: "0.9rem" }}
+                >
+                  <option value="petrol_car">Petrol Car</option>
+                  <option value="diesel_car">Diesel Car</option>
+                  <option value="petrol_bike">Petrol Bike</option>
+                  <option value="ev">Electric Vehicle</option>
+                </select>
+              </div>
+            )}
+          </div>
+
           <button
             type="submit"
             className="btn-primary"
@@ -443,20 +526,9 @@ const Routing = () => {
                   {r.distance_km} km • {r.duration_min} min
                 </div>
                 {r.via && (
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      marginTop: "5px",
-                      color: "var(--text-secondary)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
+                  <div style={{ fontSize: "0.75rem", marginTop: "5px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "4px" }}>
                     <span style={{ opacity: 0.6 }}>📍 Via</span>
-                    <span style={{ color: r.color, fontWeight: "500" }}>
-                      {r.via}
-                    </span>
+                    <span style={{ color: r.color, fontWeight: "500" }}>{r.via}</span>
                   </div>
                 )}
                 <div
@@ -469,10 +541,166 @@ const Routing = () => {
                 >
                   {r.safety_reason}
                 </div>
+                
+                {/* Journey Cost & Impact Section */}
+                {!advancedBlocked && r.tradeoff && (
+                   <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', display: 'grid', gridTemplateColumns: r.cost ? '1fr 1fr' : '1fr 1fr', gap: '8px', fontSize: '0.75rem' }}>
+                      {r.cost && (
+                        <>
+                          <div style={{ color: 'var(--text-secondary)' }}>
+                            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginBottom: '2px' }}>EST. COST</div>
+                            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.9rem' }}>₹{r.cost.estimated}</div>
+                            {r.tradeoff.costDifference > 0 ? <span style={{ color: '#F44336', fontSize: '0.7rem' }}>+₹{r.tradeoff.costDifference}</span> : <span style={{ color: '#00C853', fontSize: '0.7rem' }}>Cheapest</span>}
+                          </div>
+                          
+                          <div style={{ color: 'var(--text-secondary)' }}>
+                            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginBottom: '2px' }}>{r.cost.vehicleName.toUpperCase()}</div>
+                            <div style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{r.cost.energyUsed} {r.cost.energyUnit}</div>
+                            <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>Estimated Usage</span>
+                          </div>
+                        </>
+                      )}
+
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginBottom: '2px' }}>TIME</div>
+                        <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{r.duration_min} min</div>
+                        {r.tradeoff.timeDifferenceMinutes > 0 ? <span style={{ color: '#FF9800', fontSize: '0.7rem' }}>+{r.tradeoff.timeDifferenceMinutes} min</span> : <span style={{ color: '#00BCD4', fontSize: '0.7rem' }}>Fastest</span>}
+                      </div>
+{/*                       
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                      
+                        <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', opacity: 0.7, marginBottom: '2px' }}>POLLUTION EXP.</div>
+                      
+                        <div style={{ fontWeight: 'bold', color: r.impact.pollutionLevel === 'LOW' ? '#00C853' : (r.impact.pollutionLevel === 'MODERATE' ? '#FF9800' : '#F44336'), fontSize: '0.85rem' }}>{r.impact.pollutionLevel}</div>
+                        {r.tradeoff.pollutionDifference > 0 ? <span style={{ color: '#F44336', fontSize: '0.7rem' }}>+{r.tradeoff.pollutionDifference} AQI</span> : <span style={{ color: '#00C853', fontSize: '0.7rem' }}>Cleanest</span>}
+                      </div> */}
+                   </div>
+                )}
+
               </div>
             );
           })}
+        
+        {/* Route Trade-off Comparison */}
+        {routes.length > 0 && !advancedBlocked && (
+          <div className="card" style={{ marginTop: '10px', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '12px' }}>
+             <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', marginTop: 0 }}>Route Trade-off</h3>
+             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+               Every route has a trade-off. EcoStride shows you the impact of your choice.
+               <br/><br/>
+               <i>Usage remaining: {usageRemaining} / 5</i>
+             </p>
+             <div style={{ overflowX: 'auto' }}>
+               <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                 <thead>
+                   <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                     <th style={{ padding: '6px' }}>Type</th>
+                     <th style={{ padding: '6px' }}>Time</th>
+                     {routes[0].cost && <th style={{ padding: '6px' }}>Cost</th>}
+                     <th style={{ padding: '6px' }}>AQI</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {routes.map((r, i) => (
+                     <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                       <td style={{ padding: '8px 6px', fontWeight: 'bold', color: r.color }}>{r.label}</td>
+                       <td style={{ padding: '8px 6px' }}>{r.duration_min}m</td>
+                       {r.cost && <td style={{ padding: '8px 6px' }}>₹{r.cost.estimated}</td>}
+                       <td style={{ padding: '8px 6px' }}>{r.aqi_exposure_score}</td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+          </div>
+        )}
+
+        {/* Upgrade Modal */}
+        {showUpgradeModal && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center',
+            alignItems: 'center', zIndex: 99999, padding: '20px'
+          }}>
+             <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '24px', position: 'relative' }}>
+                <button onClick={() => setShowUpgradeModal(false)} style={{ position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+                <h2 style={{ marginTop: 0, color: 'var(--accent-cyan)' }}>Unlock Advanced EcoStride</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  You have reached your daily limit of 5 advanced route analyses on the <b>Free Plan</b>. Basic safe routing will continue to work!
+                </p>
+                
+                <div style={{ background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+                  <h4 style={{ marginTop: 0, marginBottom: '8px' }}>Premium Features</h4>
+                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <li>Unlimited advanced analysis</li>
+                    <li>Detailed journey analytics</li>
+                    <li>Personalized route insights</li>
+                  </ul>
+                </div>
+                
+                <button className="btn-primary" style={{ width: '100%', padding: '12px', opacity: 0.6, cursor: 'not-allowed' }}>
+                  Coming Soon
+                </button>
+                <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '12px', marginBottom: 0 }}>
+                  Subscription infrastructure is planned for commercialization stage.
+                </p>
+             </div>
+          </div>
+        )}
+
         </div>
+        {selectedRoute?.routeWarnings?.length > 0 && (
+          <div style={{ padding: 14, borderRadius: 10, background: "rgba(249,115,22,.12)", border: "1px solid rgba(249,115,22,.35)" }}>
+            <strong style={{ color: "#f97316", display: "block", marginBottom: 8 }}>
+              Community-reported issues ahead
+            </strong>
+            {[...new Set(selectedRoute.routeWarnings)].map((warning, index) => (
+              <div
+                key={warning}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  fontSize: "0.8rem",
+                  lineHeight: 1.35,
+                  marginTop: index === 0 ? 0 : 6,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <span
+                  aria-label={`Issue ${index + 1}`}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    flex: "0 0 22px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    background: "#f97316",
+                    color: "#fff",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {nearbyIssue && !verificationDismissed && (
+          <div style={{ padding: 12, borderRadius: 10, background: "var(--bg-tertiary)" }}>
+            <strong>Did you observe this issue?</strong>
+            <div style={{ fontSize: "0.8rem", margin: "4px 0 8px" }}>{nearbyIssue.type.replaceAll("_", " ")}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn-primary" onClick={() => submitVerification("yes")}>YES</button>
+              <button type="button" className="btn-secondary" onClick={() => submitVerification("no")}>NO</button>
+              <button type="button" className="btn-secondary" onClick={() => setVerificationDismissed(true)}>Dismiss</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div

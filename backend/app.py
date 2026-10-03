@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # Load environment variables
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().with_name('.env'))
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -67,6 +67,14 @@ from backend.auth import (
 )
 from backend.background_tasks import start_background_tasks
 
+
+def get_authenticated_user():
+    """Return the Firebase identity for a bearer-authenticated request."""
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        return None
+    return verify_google_token(header[7:].strip())
+
 # Initialize Firebase
 try:
     initialize_firebase()
@@ -77,8 +85,59 @@ except Exception as e:
 # Initialize modules
 forecaster = AQIForecaster()
 router     = RoutePlanner()
+
+from backend.services.cost_calculator import CostCalculatorService
+from backend.services.usage_tracking import UsageTrackingService
+cost_calculator = CostCalculatorService()
+usage_tracker = UsageTrackingService(limit=5)
+
 advisor    = HealthAdvisor()
 simulator  = PolicySimulator()
+
+ECO_DRIVES = [
+    {
+        "id": 1,
+        "title": "Pune River Cleanup Sprint",
+        "category": "Cleanup",
+        "description": "Collect and segregate waste from riverbanks and public trails to keep the city cleaner and reduce pollution.",
+        "city": "Pune",
+        "location": "Pune, Maharashtra",
+        "date": "2026-04-12",
+        "time": "7:00 AM - 10:00 AM",
+        "volunteers": 42,
+        "max_volunteers": 60,
+        "status": "Open",
+        "organizer": "EcoStride Team",
+    },
+    {
+        "id": 2,
+        "title": "Green Campus Revival",
+        "category": "Tree Planting",
+        "description": "Plant native trees and restore green cover across campus and neighborhood spaces.",
+        "city": "Pune",
+        "location": "Viman Nagar",
+        "date": "2026-04-18",
+        "time": "8:30 AM - 12:30 PM",
+        "volunteers": 28,
+        "max_volunteers": 50,
+        "status": "Open",
+        "organizer": "Urban Greens",
+    },
+    {
+        "id": 3,
+        "title": "Plastic-Free Market Walk",
+        "category": "Awareness",
+        "description": "Run a neighborhood awareness walk to promote refuse-free alternatives and better disposal habits.",
+        "city": "Pune",
+        "location": "FC Road",
+        "date": "2026-04-24",
+        "time": "6:30 PM - 8:00 PM",
+        "volunteers": 17,
+        "max_volunteers": 30,
+        "status": "Limited",
+        "organizer": "Community Action Group",
+    },
+]
 
 # Start periodic AQI notification checks after application services initialize.
 start_background_tasks()
@@ -172,6 +231,7 @@ def calculate_route():
         end_coords = [float(data['end_lon']), float(data['end_lat'])]
         
     mode  = data.get('mode', 'driving')
+    vehicle_type = data.get('vehicle_type', 'petrol_car')
     try:
         lat = float(data.get('lat')) if data.get('lat') else 18.5204
         lon = float(data.get('lon')) if data.get('lon') else 73.8567
@@ -179,12 +239,48 @@ def calculate_route():
         lat, lon = 18.5204, 73.8567
     city = data.get('city', 'Pune')
     
+    # Check auth for usage limits
+    auth_header = request.headers.get('Authorization')
+    user_info = None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split('Bearer ')[1]
+        try:
+            from firebase_admin import auth as fb_auth
+            user_info = fb_auth.verify_id_token(token)
+        except:
+            pass
+            
     if not start_name or not end_name:
         return jsonify({"status": "error", "message": "Start and end locations are required"}), 400
         
     try:
         routes = router.find_routes(start_name, end_name, city, lat, lon, mode, start_coords, end_coords)
-        return jsonify({"status": "success", "routes": routes})
+        try:
+            from backend.services.community_issues import CommunityIssueService
+            routes = CommunityIssueService().enrich_routes(routes)
+        except Exception as community_error:
+            # Community data is additive; do not make OSRM/AQI routing unavailable
+            # when Firebase is temporarily unavailable.
+            print(f"Community route enrichment unavailable: {community_error}")
+        
+        # New Feature: Cost Calculation and Usage Tracking
+        advanced_analysis_blocked = False
+        usage_remaining = 0
+        
+        can_proceed, remaining = usage_tracker.check_and_increment_usage(user_info)
+        
+        if can_proceed:
+            routes = cost_calculator.compare_routes(routes, vehicle_type)
+            usage_remaining = remaining
+        else:
+            advanced_analysis_blocked = True
+            
+        return jsonify({
+            "status": "success", 
+            "routes": routes,
+            "advanced_analysis_blocked": advanced_analysis_blocked,
+            "usage_remaining": usage_remaining
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -461,29 +557,19 @@ def test_alert():
 
 @app.route('/api/community/report', methods=['POST'])
 def community_report():
-    from backend.services.reports_management import ReportsManagementService
-    from backend.services.alert_service import AQIAlertService
-    reports_service = ReportsManagementService()
-    alert_service = AQIAlertService()
+    from backend.services.community_issues import CommunityIssueService
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"status": "error", "message": "Authentication is required"}), 401
     data = request.json or {}
-    report_type = data.get('type', 'other')
-    description = data.get('description', '')
-    city = data.get('city', 'Amravati')
-    lat = float(data.get('lat', 20.9343))
-    lon = float(data.get('lon', 77.7489))
-
-    success, result = reports_service.create_report(report_type, description, city, lat, lon)
+    success, result = CommunityIssueService().create_report(data, user)
     if not success:
-        return jsonify({"status": "error", **result}), 500
-
-    notified = alert_service.send_authority_report(report_type, description, city, lat, lon)
-    message = "Report submitted and authority notified" if notified else "Report submitted, but authority notification failed"
+        return jsonify({"status": "error", **result}), 400
 
     return jsonify({
         "status": "success",
         **result,
-        "message": message,
-        "notified": notified
+        "message": "Report submitted successfully",
     }), 201
 
 
@@ -491,14 +577,27 @@ def community_report():
 def get_community_reports():
     """Fetch community reports for the public community page"""
     try:
-        from backend.services.reports_management import ReportsManagementService
-
-        service = ReportsManagementService()
-        reports = service.get_all_reports(filter_status=request.args.get('status'))
+        from backend.services.community_issues import CommunityIssueService
+        filters = {key: request.args.get(key) for key in ("city", "lat", "lon", "radius", "status") if request.args.get(key)}
+        reports = CommunityIssueService().get_reports(filters)
         return jsonify({"status": "success", "reports": reports}), 200
     except Exception as e:
         print(f"Error fetching community reports: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/community/reports/<report_id>/feedback', methods=['POST'])
+def community_report_feedback(report_id):
+    from backend.services.community_issues import CommunityIssueService
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"status": "error", "message": "Authentication is required"}), 401
+    try:
+        success, result = CommunityIssueService().submit_feedback(report_id, request.json or {}, user)
+        return jsonify({"status": "success" if success else "error", **result}), 200 if success else 400
+    except Exception as exc:
+        print(f"Error submitting community feedback: {exc}")
+        return jsonify({"status": "error", "message": "Unable to submit feedback"}), 500
 
 
 # ─── PDF Download Endpoints ───────────────────────────────────────────────────
@@ -1416,7 +1515,150 @@ def admin_login():
         }), 500
 
 
+# --- Eco Drives APIs ---
+from backend.services.eco_drives import EcoDrivesService
+
+eco_drives_service = EcoDrivesService()
+
+def require_auth(f):
+    from functools import wraps
+    from flask import request, jsonify
+    from backend.auth import verify_google_token
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'status': 'error', 'message': 'No valid authorization token'}), 401
+            
+        id_token = auth_header[7:]
+        user_info = verify_google_token(id_token)
+        if not user_info:
+            return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+            
+        return f(user_info, *args, **kwargs)
+    return decorated_function
+
+def require_organizer(f):
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    @require_auth
+    def decorated_function(user_info, *args, **kwargs):
+        organizer = eco_drives_service.get_organizer(user_info['uid'])
+        if not organizer or organizer.get('status') != 'approved':
+            return jsonify({'status': 'error', 'message': 'Unauthorized organizer'}), 403
+            
+        return f(organizer, *args, **kwargs)
+    return decorated_function
+
+
+# Public Event APIs
+@app.route('/api/events', methods=['GET'])
+def get_events():
+    status_filter = request.args.get('status')
+    city = request.args.get('city')
+    event_type = request.args.get('type')
+    
+    success, result = eco_drives_service.get_all_events(status_filter, city, event_type)
+    if success:
+        return jsonify({'status': 'success', 'events': result})
+    return jsonify({'status': 'error', 'message': result}), 500
+
+@app.route('/api/events/<event_id>', methods=['GET'])
+def get_event_details(event_id):
+    success, result = eco_drives_service.get_event(event_id)
+    if success:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': result}), 404
+
+@app.route('/api/events/<event_id>/join', methods=['POST'])
+@require_auth
+def request_to_join(user_info, event_id):
+    success, result = eco_drives_service.request_to_join(event_id, user_info)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/events/<event_id>/join-status', methods=['GET'])
+@require_auth
+def get_join_status(user_info, event_id):
+    success, result = eco_drives_service.get_join_status(event_id, user_info['uid'])
+    if success:
+        return jsonify({'status': 'success', **result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/events/<event_id>/join', methods=['DELETE'])
+@require_auth
+def cancel_join_request(user_info, event_id):
+    success, result = eco_drives_service.cancel_join_request(event_id, user_info['uid'])
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+# Organizer APIs
+@app.route('/api/organizer/apply', methods=['POST'])
+@require_auth
+def apply_organizer(user_info):
+    data = request.json or {}
+    success, result = eco_drives_service.apply_organizer(user_info, data)
+    if success:
+        return jsonify({'status': 'success', 'organizer': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events', methods=['POST'])
+@require_organizer
+def create_org_event(organizer):
+    data = request.json or {}
+    success, result = eco_drives_service.create_event(organizer, data)
+    if success:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events', methods=['GET'])
+@require_organizer
+def get_org_events(organizer):
+    success, result = eco_drives_service.get_organizer_events(organizer['uid'])
+    if success:
+        return jsonify({'status': 'success', 'events': result})
+    return jsonify({'status': 'error', 'message': result}), 500
+
+@app.route('/api/organizer/events/<event_id>', methods=['GET'])
+@require_organizer
+def get_org_event(organizer, event_id):
+    success, result = eco_drives_service.get_event(event_id)
+    if success and result.get('organizerId') == organizer['uid']:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': 'Not found or unauthorized'}), 404
+
+@app.route('/api/organizer/events/<event_id>', methods=['PUT'])
+@require_organizer
+def update_org_event(organizer, event_id):
+    data = request.json or {}
+    success, result = eco_drives_service.update_event(organizer['uid'], event_id, data)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events/<event_id>/cancel', methods=['POST'])
+@require_organizer
+def cancel_org_event(organizer, event_id):
+    success, result = eco_drives_service.cancel_event(organizer['uid'], event_id)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events/<event_id>/participants', methods=['GET'])
+@require_organizer
+def get_org_event_participants(organizer, event_id):
+    success, result = eco_drives_service.get_event_participants(organizer['uid'], event_id)
+    if success:
+        return jsonify({'status': 'success', 'participants': result})
+    return jsonify({'status': 'error', 'message': result}), 400
 if __name__ == '__main__':
     from config import PORT, HOST, DEBUG
     print(f"Starting Team-X project on http://{HOST}:{PORT}")
     app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)
+
+

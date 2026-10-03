@@ -71,6 +71,13 @@ const endIcon = L.divIcon({
   popupAnchor: [0, -24],
 });
 
+const communityIssueIcon = L.divIcon({
+  className: "community-issue-marker",
+  html: '<div style="background:#f97316;color:#fff;width:28px;height:28px;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.45)">!</div>',
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
+});
+
 // ── FIXED: colored fill + white border + white AQI text ──
 const createAqiIcon = (aqi) => {
   const size = aqi > 200 ? 38 : aqi > 150 ? 32 : aqi > 100 ? 26 : 22;
@@ -101,6 +108,30 @@ const createAqiIcon = (aqi) => {
 };
 
 // Component to center on a point — pans/flies to new coordinates whenever they change
+
+const ecoDriveIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    background: #10b981;
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    cursor: pointer;
+  ">
+    <span style="transform: rotate(45deg); font-size: 14px;">🌿</span>
+  </div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
+});
+
 const MapController = ({ center, route }) => {
   const map = useMap();
   const lastCenter = useRef(null);
@@ -300,7 +331,11 @@ const MapWidget = ({
   const centerLat = isNavigating && userPos ? userPos.lat : lat;
   const centerLon = isNavigating && userPos ? userPos.lon : lon;
 
+  
   const [pins, setPins] = useState([]);
+  const [communityIssues, setCommunityIssues] = useState([]);
+  const [ecoDrives, setEcoDrives] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [viewport, setViewport] = useState(null);
 
@@ -321,6 +356,13 @@ const MapWidget = ({
           `${API_BASE_URL}/api/map/pins?lat=${requestLat}&lon=${requestLon}&city=${encodeURIComponent(city)}${boundsQuery}`,
         );
         setPins(res.data.pins || []);
+
+        try {
+          const res2 = await axios.get(`${API_BASE_URL}/api/events?status=upcoming&city=${encodeURIComponent(city)}`);
+          setEcoDrives(res2.data.events || []);
+        } catch(e) {
+          console.error('Failed to load eco drives:', e);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -332,6 +374,32 @@ const MapWidget = ({
     const interval = setInterval(fetchPins, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [lat, lon, city, viewport]);
+
+  useEffect(() => {
+    const fetchIssues = async () => {
+      try {
+        // Use the map position rather than the dashboard city label so reports
+        // saved with a manual/reverse-geocoded city are still visible.
+        const params = {};
+        if (viewport) {
+          params.lat = viewport.lat;
+          params.lon = viewport.lon;
+          params.radius = 25000;
+        } else {
+          params.lat = lat;
+          params.lon = lon;
+          params.radius = 25000;
+        }
+        const res = await axios.get(`${API_BASE_URL}/api/community/reports`, { params });
+        setCommunityIssues(res.data.reports || []);
+      } catch (err) {
+        console.error("Failed to load community issues", err);
+      }
+    };
+    if (city) fetchIssues();
+    const interval = setInterval(fetchIssues, 60000);
+    return () => clearInterval(interval);
+  }, [city, lat, lon, viewport]);
 
   if (!centerLat || !centerLon) {
     return (
@@ -493,6 +561,33 @@ const MapWidget = ({
           </Marker>
         )}
 
+        {[...communityIssues, ...(route?.communityIssues || [])]
+          .filter((issue, index, all) => all.findIndex((item) => item.id === issue.id) === index)
+          .map((issue) => (
+            <Marker key={`issue-${issue.id}`} position={[issue.lat, issue.lon]} icon={communityIssueIcon}>
+              <Popup>
+                <div style={{ color: "#111", minWidth: 220, lineHeight: 1.45 }}>
+                  <strong style={{ textTransform: "capitalize" }}>
+                    {issue.title || issue.type?.replaceAll("_", " ") || "Community issue"}
+                  </strong>
+                  <div style={{ marginTop: 4 }}>
+                    {issue.description || "No description provided."}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: "0.8rem" }}>
+                    <strong>Type:</strong> {issue.type?.replaceAll("_", " ") || "Other"}<br />
+                    <strong>Severity:</strong> {issue.severity || "medium"}<br />
+                    <strong>Status:</strong> {issue.status || "active"}<br />
+                    <strong>Reported:</strong>{" "}
+                    {issue.createdAt ? new Date(issue.createdAt).toLocaleString() : "Unknown"}<br />
+                    <strong>Reported by:</strong> {issue.reportedBy?.name || "Community member"}<br />
+                    {issue.address && <><strong>Address:</strong> {issue.address}<br /></>}
+                    <strong>Confirmations:</strong> YES {issue.yesCount || 0} · NO {issue.noCount || 0}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
         {!showHeatmap ? (
           <MarkerClusterGroup
             chunkedLoading
@@ -538,6 +633,33 @@ const MapWidget = ({
                     </div>
                   </div>
                 </Popup>
+              </Marker>
+            ))}
+
+            {ecoDrives.map(drive => (
+              <Marker 
+                 key={drive.id}
+                 position={[drive.location.lat, drive.location.lon]}
+                 icon={ecoDriveIcon}
+              >
+                 <Popup>
+                    <div style={{ color: '#111' }}>
+                       <h4 style={{ margin: '0 0 4px 0' }}>{drive.title}</h4>
+                       <div style={{ background: '#34A853', padding: '4px 8px', borderRadius: '12px', color: '#fff', display: 'inline-block', marginBottom: 8, fontSize: 12, fontWeight: 'bold' }}>
+                          🌿 {drive.type}
+                       </div>
+                       <div style={{ fontSize: 13 }}>📅 {drive.date}</div>
+                       <div style={{ fontSize: 13 }}>⏰ {drive.startTime} - {drive.endTime}</div>
+                       <div style={{ fontSize: 13, marginBottom: 8 }}>📍 {drive.location.name || drive.location.address}</div>
+                       <button 
+                         className="btn btn-primary" 
+                         style={{ padding: '6px 12px', width: '100%', fontSize: 13, borderRadius: 8 }}
+                         onClick={() => window.location.href = `/dashboard/eco-drives/${drive.id}`}
+                       >
+                         View Drive
+                       </button>
+                    </div>
+                 </Popup>
               </Marker>
             ))}
           </MarkerClusterGroup>

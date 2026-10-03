@@ -18,6 +18,7 @@ export const NAV_ITEMS = [
   { to: "/dashboard/safe-zones", icon: Heart, label: "Safe Zones", sub: "Clean Areas" },
   { to: "/dashboard/health-advisory", icon: HeartPulse, label: "Health Advisory", sub: "Personalized" },
   { to: "/dashboard/compare", icon: DivideSquare, label: "Compare", sub: "Cities" },
+  { to: "/dashboard/eco-drives", icon: Heart, label: "Eco Drives", sub: "Volunteer" },
   { to: "/dashboard/community", icon: Users, label: "Community", sub: "Reports" },
   { to: "/dashboard/alerts", icon: Bell, label: "Alerts", sub: "Notifications" },
 ];

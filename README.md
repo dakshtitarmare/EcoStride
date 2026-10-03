@@ -30,7 +30,7 @@ EcoStride provides six core capabilities through a unified web dashboard:
 | **Live AQI Dashboard** | Real-time Air Quality Index with colony-level granularity on an interactive map |
 | **72-Hour Forecast** | Heuristic AQI prediction using live data + traffic/nighttime patterns |
 | **Eco-Friendly Routing** | Up to 5 alternative routes scored and sorted by AQI exposure (Cleanest → Industrial) |
-| **Health Advisory** | Personalized health risk scoring powered by Groq LLM or local Ollama |
+| **Health Advisory** | Personalized health risk scoring powered by Gemini |
 | **Policy Simulation** | Simulate the AQI impact of government interventions (odd-even, CNG mandates, green zones) |
 | **Alert & Community System** | Subscribe to AQI threshold alerts via email/SMS; file community pollution reports |
 
@@ -91,7 +91,7 @@ Standalone HTML pages served directly by Flask using vanilla JS + Leaflet. These
           ├── AQICN / WAQI (physical station fallback)
           ├── Nominatim / Overpass (geocoding + map features)
           ├── OSRM (open-source routing engine)
-          └── Groq API / Ollama (LLM health advisory)
+          └── Google Gemini API (LLM health advisory)
 ```
 
 ---
@@ -115,7 +115,7 @@ EcoStride/
 │   ├── __init__.py
 │   ├── forecasting.py        # AQIForecaster — live AQI fetch, caching, 72h prediction, colony pins
 │   ├── routing.py            # RoutePlanner — OSRM multi-route with AQI exposure scoring
-│   ├── health_advisory.py    # HealthAdvisor — risk scoring + Groq/Ollama LLM advisory
+│   ├── health_advisory.py    # HealthAdvisor — risk scoring + Gemini LLM advisory
 │   ├── policy_analysis.py    # PolicySimulator — Overpass-driven policy detection + AQI simulation
 │   └── source_detection.py   # Pollution source detection helpers (consumed by PolicySimulator)
 │
@@ -193,8 +193,7 @@ EcoStride/
 | **Nominatim** | REST (JSON) | Forward + reverse geocoding (city names → coords) | Routing |
 | **Overpass API** | POST (JSON) | OSM data: industries, farmland, roads, parks | Policy/Map |
 | **OSRM** | REST (GeoJSON) | Road routing with turn-by-turn steps | Routing |
-| **Groq API** | REST (JSON) | LLM health advisory generation (llama-3.3-70b) | Health |
-| **Ollama** | REST (localhost) | Local LLM fallback for health advisory | Health (opt.) |
+| **Google Gemini API** | REST (JSON) | LLM health advisory and chatbot generation | Health / Chat |
 | **Fast2SMS** | REST | SMS delivery for AQI alerts | Alerts (opt.) |
 | **Gmail SMTP** | SMTP TLS/SSL | Email alert delivery & authority reports | Alerts |
 
@@ -229,7 +228,7 @@ EcoStride/
 6. Health advisory (POST /api/health/advisory)
    └──► get_current() → live AQI
    └──► calculate_risk_score(aqi, profile) → score 0–100 with age/condition multipliers
-   └──► generate_advisory() → Groq API / Ollama / static fallback text
+   └──► generate_advisory() → Google Gemini API / static fallback text
 
 7. Background alerts (every 30 min via schedule)
    └──► Load subscribers from SQLite
@@ -270,14 +269,13 @@ Copy `.env.example` to `.env` and populate all values before running.
 |---|---|---|---|---|
 | `OPENWEATHER_API_KEY` | `string` | Yes | OWM Air Pollution API key | `abc123...` |
 | `AQICN_API_TOKEN` | `string` | Yes | AQICN / WAQI station token | `xyz789...` |
-| `GROQ_API_KEY` | `string` | Optional | Groq LLM for health advisories | `gsk_...` |
+| `GEMINI_API_KEY` | `string` | Required for AI responses | Google Gemini API key | `AIza...` |
 | `GOV_INDIA_API_KEY` | `string` | Yes | data.gov.in API key | `579b...` |
 | `GOV_INDIA_RESOURCE_ID` | `string` | Yes | Dataset resource ID | `3b01bcb8-...` |
 | `SMTP_EMAIL` | `string` | Optional | Gmail address for sending alerts | `you@gmail.com` |
 | `SMTP_APP_PASSWORD` | `string` | Optional | Gmail App Password (not login pw) | `abcd efgh ...` |
 | `AUTHORITY_EMAIL` | `string` | Optional | Recipient of community reports | `authority@gov.in` |
 | `FAST2SMS_API_KEY` | `string` | Optional | Fast2SMS key for SMS alerts | `abc...` |
-| `USE_LOCAL_LLM` | `bool` | Optional | Use Ollama instead of Groq | `False` |
 | `DEBUG` | `bool` | Optional | Flask debug mode | `True` |
 | `PORT` | `int` | Optional | Flask server port | `5000` |
 
@@ -289,8 +287,7 @@ Copy `config_example.py` to `config.py`. This Python module is imported directly
 # Key settings in config.py
 OPENWEATHER_API_KEY = "your_key"
 AQICN_API_TOKEN     = "your_token"
-GROQ_API_KEY        = "your_key"       # Set to "your_free_key_here" to use fallback
-USE_LOCAL_LLM       = False             # True → use Ollama on localhost:11434
+GEMINI_API_KEY      = "your_key"       # Falls back to rule-based guidance when unavailable
 GOV_INDIA_API_KEY   = "your_key"
 GOV_INDIA_RESOURCE_ID = "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"  # Default CPCB dataset
 DATABASE_PATH       = "database/teamx.db"
@@ -305,8 +302,7 @@ DATA_UPDATE_INTERVAL = 15               # minutes
 
 | Flag | Location | Effect |
 |---|---|---|
-| `USE_LOCAL_LLM = True` | `config.py` | Routes health advisory to Ollama (`localhost:11434`) instead of Groq |
-| `GROQ_API_KEY = "your_free_key_here"` | `config.py` | Skips Groq API; uses rule-based static advisory fallback |
+| `GEMINI_API_KEY` | `config.py` / `.env` | Routes health advisory and chatbot requests to Google Gemini |
 | `DEBUG = True` | `config.py` / `.env` | Flask debug mode with auto-reload and detailed tracebacks |
 | `CACHE_ENABLED = True` | `config.py` | Enables in-memory TTL caches in `AQIForecaster` (10 min for current AQI, 30 min for forecasts) |
 
@@ -386,7 +382,7 @@ The single entry point. Initialises all four model instances at startup (not per
 | `calculate_risk_score` | `(aqi, profile)` | Dict: `{score, level, multiplier_applied}` |
 | `generate_advisory` | `(profile, aqi)` | Plain-text advisory string |
 
-**LLM routing:** `generate_advisory()` checks `USE_LOCAL_LLM` → Ollama; else `GROQ_API_KEY` set → Groq (`llama-3.3-70b-versatile`); else static rule-based fallback. The risk score is purely algorithmic with age, condition, and activity-level multipliers.
+**LLM routing:** `generate_advisory()` and chatbot methods use Google Gemini when `GEMINI_API_KEY` is configured; otherwise they use static rule-based fallback text. The risk score is purely algorithmic with age, condition, and activity-level multipliers.
 
 ---
 
@@ -533,7 +529,7 @@ The React SPA runs at `http://localhost:5173` and proxies all `/api/*` requests 
 | `sqlite3.OperationalError: no such table` | `run_setup.py` not run | Run `python run_setup.py` |
 | `CORS error` in browser | Flask-CORS not installed | `pip install flask-cors` |
 | Routing returns empty list | OSRM unreachable or start==end | Check internet; ensure start and end are different locations |
-| Health advisory returns fallback text | `GROQ_API_KEY` not set or invalid | Set key in `config.py` or set `USE_LOCAL_LLM=True` with Ollama running |
+| Health advisory returns fallback text | `GEMINI_API_KEY` not set or invalid | Set a valid Gemini key in `backend/.env` |
 | `rasterio` install fails on Windows | C++ build tools required | Install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) first |
 | Email alerts not sending | SMTP credentials not set | Generate Gmail App Password; set `SMTP_EMAIL` + `SMTP_APP_PASSWORD` in `.env` |
 

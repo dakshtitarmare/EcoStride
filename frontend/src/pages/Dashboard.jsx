@@ -77,7 +77,10 @@ const AQIRing = ({ aqi, category }) => {
 
 const Dashboard = () => {
   const { location } = useLocation();
+  
   const [data, setData] = useState(null);
+  const [ecoDrives, setEcoDrives] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -89,6 +92,13 @@ const Dashboard = () => {
         `${API_BASE_URL}/api/forecast/current?lat=${location.lat}&lon=${location.lon}&city=${location.city}`,
       );
       setData(res.data.data);
+      
+      try {
+        const driveRes = await axios.get(`${API_BASE_URL}/api/events?status=upcoming`);
+        setEcoDrives(driveRes.data.events || []);
+      } catch (e) {
+        console.error('Failed to load eco drives');
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -286,6 +296,21 @@ const Dashboard = () => {
           </button>
         </div>
       </div>
+
+      {ecoDrives.length > 0 && (
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', marginBottom: 20, background: 'linear-gradient(90deg, rgba(34,197,94,0.1), rgba(16,185,129,0.05))', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+             <div style={{ background: '#10b981', color: '#fff', width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌿</div>
+             <div>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Environmental Drives</h3>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>{ecoDrives.length} upcoming activities</p>
+             </div>
+          </div>
+          <button className="btn btn-primary" onClick={() => window.location.href='/dashboard/eco-drives'} style={{ padding: '8px 16px', whiteSpace: 'nowrap', width: 'fit-content', flexShrink: 0 }}>
+             View Drives →
+          </button>
+        </div>
+      )}
 
       {/* ── Main grid: gauge + map ── */}
       <div className="dash-main">

@@ -7,12 +7,9 @@ import requests
 import os
 
 try:
-    from backend.temp_config import SMTP_EMAIL, SMTP_APP_PASSWORD, FAST2SMS_API_KEY, AUTHORITY_EMAIL
+    from backend.config import SMTP_EMAIL, SMTP_APP_PASSWORD, FAST2SMS_API_KEY, AUTHORITY_EMAIL
 except ImportError:
-    SMTP_EMAIL = ""
-    SMTP_APP_PASSWORD = ""
-    FAST2SMS_API_KEY = ""
-    AUTHORITY_EMAIL = ""
+    from config import SMTP_EMAIL, SMTP_APP_PASSWORD, FAST2SMS_API_KEY, AUTHORITY_EMAIL
 
 class AQIAlertService:
     def __init__(self):
@@ -230,7 +227,7 @@ class AQIAlertService:
               and safe routing suggestions instantly.
             </p>
 
-            <a href="http://localhost:5173" 
+            <a href="https://map-aqi.vercel.app/login" 
                style="background:#00e5a0;color:#080d0f;padding:12px 24px;border-radius:8px;
                       text-decoration:none;display:inline-block;font-weight:bold;font-size:0.9rem">
               🗺️ View Live AQI Dashboard
@@ -336,7 +333,7 @@ class AQIAlertService:
               </ul>
             </div>
 
-            <a href="http://localhost:5173" 
+            <a href="https://map-aqi.vercel.app/login" 
                style="background:#00e5a0;color:#080d0f;padding:12px 24px;border-radius:8px;
                       text-decoration:none;display:inline-block;font-weight:bold;font-size:0.9rem">
               🗺️ View Safe Routes on EcoStride

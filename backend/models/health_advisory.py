@@ -4,12 +4,13 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 try:
-    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from backend.config import GEMINI_API_KEY, DATABASE_PATH
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from config import GEMINI_API_KEY, DATABASE_PATH
+import time
 
 class HealthAdvisor:
     def __init__(self):
@@ -94,6 +95,9 @@ than inventing live measurements. Be concise, practical, and clear.
 Never diagnose illness, prescribe medication, or replace a doctor. For urgent or severe symptoms,
 recommend immediate professional medical care. For general non-medical questions, answer helpfully
 and distinguish general knowledge from live EcoStride data.
+    Return a complete answer in 3-5 short sentences or bullet points. Include the reason and the
+    practical recommendation. Never end with an unfinished sentence, colon, or lead-in such as
+    "Here is why".
 
 Health Advisory context:
 {json.dumps(context, indent=2, default=str)}
@@ -130,12 +134,6 @@ Current application data:
 User question: {question}
 """
 
-        if USE_LOCAL_LLM:
-            return self._generate_ollama_advisory(prompt)
-        if GROQ_API_KEY and GROQ_API_KEY != "your_free_key_here":
-            groq_answer = self._generate_groq_chat(prompt)
-            if groq_answer:
-                return groq_answer
         if GEMINI_API_KEY and GEMINI_API_KEY != "your_api_key_here":
             gemini_answer = self._generate_gemini_chat(prompt)
             if gemini_answer:
@@ -179,125 +177,115 @@ User question: {question}
             return f"For {city}, the current AQI is {aqi} ({category}). Ask me about pollutants, health precautions, routes, forecasts, or alerts."
         return "I can help with air quality, pollutants, health precautions, routes, forecasts, safe zones, policies, and alerts."
 
-    def _generate_groq_chat(self, prompt):
-        headers = {
-            'Authorization': f'Bearer {GROQ_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        try:
-            response = requests.post(
-                'https://api.groq.com/openai/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'llama-3.3-70b-versatile',
-                    'messages': [
-                        {'role': 'system', 'content': 'You are the EcoStride environmental health assistant.'},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    'temperature': 0.4,
-                    'max_tokens': 450
-                },
-                timeout=20
-            )
-            if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
-            print(f"Groq chat error: {response.status_code} - {response.text}")
-        except Exception as error:
-            print(f"Groq chat connection error: {error}")
-        return None
+    def _generate_fallback_advisory(self, profile, current_aqi):
+        """Provide useful guidance when Gemini is unavailable."""
+        conditions = str(profile.get("conditions", "")).lower()
+        sensitive = any(term in conditions for term in ("asthma", "copd", "respiratory", "cardiovascular", "allergy"))
+        activity = str(profile.get("activity", "moderate")).lower()
+
+        if current_aqi <= 50:
+            level = "Low"
+            precautions = "Normal outdoor activity is generally reasonable."
+        elif current_aqi <= 100:
+            level = "Moderate"
+            precautions = "Sensitive people should monitor symptoms and reduce prolonged heavy exertion if needed."
+        elif current_aqi <= 150:
+            level = "High"
+            precautions = "Reduce prolonged outdoor activity and consider a well-fitting mask outdoors."
+        else:
+            level = "Severe"
+            precautions = "Avoid outdoor exertion, keep windows closed, and use filtered indoor air where possible."
+
+        if sensitive:
+            precautions += " Your reported health conditions may increase sensitivity to pollution."
+        if activity in ("high", "outdoor") and current_aqi > 100:
+            precautions += " Choose a lighter indoor activity until air quality improves."
+
+        return (
+            f"Risk Level: {level}.\n"
+            f"- Precautions: {precautions}\n"
+            "- Indoor air: Keep doors and windows closed during pollution peaks and avoid indoor smoke.\n"
+            "- Medical note: Seek professional care for severe or worsening breathing symptoms."
+        )
+
 
     def _generate_gemini_chat(self, prompt):
-        try:
-            response = requests.post(
-                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-                params={'key': GEMINI_API_KEY},
-                json={
-                    'contents': [{'parts': [{'text': prompt}]}],
-                    'generationConfig': {'temperature': 0.4, 'maxOutputTokens': 450}
-                },
-                timeout=20
-            )
-            if response.status_code == 200:
-                parts = response.json().get('candidates', [{}])[0].get('content', {}).get('parts', [])
-                answer = ''.join(part.get('text', '') for part in parts).strip()
-                return answer or None
-            print(f"Gemini chat error: {response.status_code} - {response.text}")
-        except Exception as error:
-            print(f"Gemini chat connection error: {error}")
-        return None
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
 
-    def _generate_ollama_advisory(self, prompt):
-        try:
-            # Assumes llama2 or llama3 models pulled locally
-            response = requests.post('http://localhost:11434/api/generate',
-                json={
-                    'model': 'llama3',  # Defaults
-                    'prompt': prompt,
-                    'stream': False
-                }, timeout=10)
-            if response.status_code == 200:
-                return response.json().get('response', "Local Model Error.")
-        except Exception as e:
-            print(f"Ollama connection error (Is it running?): {e}")
-            return "Ollama engine not reachable. Falling back to default advice.\n" + self._generate_fallback_advisory({}, 100)
-    
-    def _generate_groq_advisory(self, prompt):
-        headers = {
-            'Authorization': f'Bearer {GROQ_API_KEY}',
-            'Content-Type': 'application/json'
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.4,
+                 "maxOutputTokens": 1024
+            }
         }
-        
-        try:
-            response = requests.post(
-                'https://api.groq.com/openai/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'llama-3.3-70b-versatile',  # Updated to a more robust versatile model
-                    'messages': [
-                        {'role': 'system', 'content': 'You are a concise environmental health advisor. Provide clear, actionable advice based on AQI data.'},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    'temperature': 0.6,
-                    'max_tokens': 500
-                }, timeout=15)
-            
-            if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
-            else:
-                print(f"Groq API Error: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"Groq connection error: {e}")
-            
-        return "Groq generation failed. " + self._generate_fallback_advisory({}, 100)
 
-    def _generate_fallback_advisory(self, profile, current_aqi):
-        """Fallback when LLMs aren't configured or fail"""
-        if current_aqi < 50:
-            return "Risk Level: Low.\n- Air quality is great. Safe for outdoor activities."
-        elif current_aqi < 100:
-            return "Risk Level: Moderate.\n- Unusually sensitive people should consider reducing prolonged or heavy exertion."
-        else:
-            return "Risk Level: High.\n- Everyone may begin to experience health effects; sensitive groups may experience more serious effects. Avoid outdoor exertion."
+        max_retries = 3
 
-    def send_email_alert(self, user_email, message):
-        """Free SMTP Alert implementation"""
-        sender = os.environ.get('SMTP_EMAIL', 'your_gmail@gmail.com')
-        password = os.environ.get('SMTP_APP_PASSWORD', 'your_app_password')
-        
-        if password == 'your_app_password':
-            print(f"Skipping email alert to {user_email}: SMTP credentials not configured.")
-            return False
-            
-        try:
-            msg = MIMEText(message)
-            msg['Subject'] = "🚨 Team-X Air Quality Alert"
-            msg['From'] = sender
-            msg['To'] = user_email
-            
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                server.login(sender, password)
-                server.send_message(msg)
-            return True
-        except Exception as e:
-            print(f"Failed sending email alert: {e}")
-            return False
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url,
+                    params={"key": GEMINI_API_KEY},
+                    json=payload,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    parts = (
+                        response.json()
+                        .get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [])
+                    )
+
+                    answer = "".join(
+                        part.get("text", "")
+                        for part in parts
+                    ).strip()
+
+                    return answer or None
+
+                if response.status_code in (429, 500, 502, 503, 504):
+                    wait_time = 2 ** attempt
+
+                    print(
+                        f"Gemini temporary error {response.status_code}. "
+                        f"Retrying in {wait_time}s... "
+                        f"(attempt {attempt + 1}/{max_retries})"
+                    )
+
+                    time.sleep(wait_time)
+                    continue
+
+                print(
+                    f"Gemini chat error: "
+                    f"{response.status_code} - {response.text}"
+                )
+                return None
+
+            except requests.exceptions.Timeout:
+                print(
+                    f"Gemini request timed out. "
+                    f"Retrying... (attempt {attempt + 1}/{max_retries})"
+                )
+
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+
+            except requests.exceptions.RequestException as error:
+                print(f"Gemini connection error: {error}")
+
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+
+        print("Gemini request failed after all retries.")
+        return None
