@@ -67,6 +67,14 @@ from backend.auth import (
 )
 from backend.background_tasks import start_background_tasks
 
+
+def get_authenticated_user():
+    """Return the Firebase identity for a bearer-authenticated request."""
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        return None
+    return verify_google_token(header[7:].strip())
+
 # Initialize Firebase
 try:
     initialize_firebase()
@@ -247,6 +255,13 @@ def calculate_route():
         
     try:
         routes = router.find_routes(start_name, end_name, city, lat, lon, mode, start_coords, end_coords)
+        try:
+            from backend.services.community_issues import CommunityIssueService
+            routes = CommunityIssueService().enrich_routes(routes)
+        except Exception as community_error:
+            # Community data is additive; do not make OSRM/AQI routing unavailable
+            # when Firebase is temporarily unavailable.
+            print(f"Community route enrichment unavailable: {community_error}")
         
         # New Feature: Cost Calculation and Usage Tracking
         advanced_analysis_blocked = False
@@ -542,29 +557,19 @@ def test_alert():
 
 @app.route('/api/community/report', methods=['POST'])
 def community_report():
-    from backend.services.reports_management import ReportsManagementService
-    from backend.services.alert_service import AQIAlertService
-    reports_service = ReportsManagementService()
-    alert_service = AQIAlertService()
+    from backend.services.community_issues import CommunityIssueService
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"status": "error", "message": "Authentication is required"}), 401
     data = request.json or {}
-    report_type = data.get('type', 'other')
-    description = data.get('description', '')
-    city = data.get('city', 'Amravati')
-    lat = float(data.get('lat', 20.9343))
-    lon = float(data.get('lon', 77.7489))
-
-    success, result = reports_service.create_report(report_type, description, city, lat, lon)
+    success, result = CommunityIssueService().create_report(data, user)
     if not success:
-        return jsonify({"status": "error", **result}), 500
-
-    notified = alert_service.send_authority_report(report_type, description, city, lat, lon)
-    message = "Report submitted and authority notified" if notified else "Report submitted, but authority notification failed"
+        return jsonify({"status": "error", **result}), 400
 
     return jsonify({
         "status": "success",
         **result,
-        "message": message,
-        "notified": notified
+        "message": "Report submitted successfully",
     }), 201
 
 
@@ -572,14 +577,27 @@ def community_report():
 def get_community_reports():
     """Fetch community reports for the public community page"""
     try:
-        from backend.services.reports_management import ReportsManagementService
-
-        service = ReportsManagementService()
-        reports = service.get_all_reports(filter_status=request.args.get('status'))
+        from backend.services.community_issues import CommunityIssueService
+        filters = {key: request.args.get(key) for key in ("city", "lat", "lon", "radius", "status") if request.args.get(key)}
+        reports = CommunityIssueService().get_reports(filters)
         return jsonify({"status": "success", "reports": reports}), 200
     except Exception as e:
         print(f"Error fetching community reports: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/community/reports/<report_id>/feedback', methods=['POST'])
+def community_report_feedback(report_id):
+    from backend.services.community_issues import CommunityIssueService
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"status": "error", "message": "Authentication is required"}), 401
+    try:
+        success, result = CommunityIssueService().submit_feedback(report_id, request.json or {}, user)
+        return jsonify({"status": "success" if success else "error", **result}), 200 if success else 400
+    except Exception as exc:
+        print(f"Error submitting community feedback: {exc}")
+        return jsonify({"status": "error", "message": "Unable to submit feedback"}), 500
 
 
 # ─── PDF Download Endpoints ───────────────────────────────────────────────────

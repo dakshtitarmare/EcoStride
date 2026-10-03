@@ -4,15 +4,26 @@ import { useLocation } from "../hooks/useLocation";
 import { API_BASE_URL } from "../apiConfig";
 import jsPDF from "jspdf";
 import { AlertTriangle, FileDown, Megaphone, Plus, RefreshCw, Send, X } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import IssueLocationPicker from "../components/IssueLocationPicker";
 import "../styles/Community.css";
 
 const Community = () => {
   const { location } = useLocation();
+  const { idToken } = useAuth();
   const [reports, setReports] = useState([]);
   const [communityMessages, setCommunityMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(true);
-  const [form, setForm] = useState({ type: "fire", description: "" });
+  const [form, setForm] = useState({
+    type: "fire",
+    title: "",
+    description: "",
+    severity: "medium",
+    lat: location.lat,
+    lon: location.lon,
+    address: "",
+  });
 
   // States for Community Message Form
   const [showMessageForm, setShowMessageForm] = useState(false);
@@ -41,33 +52,21 @@ const Community = () => {
 
   const fetchReports = async () => {
     try {
-      const resp = await axios.get(`${API_BASE_URL}/api/community/reports`);
+      const resp = await axios.get(`${API_BASE_URL}/api/community/reports`, {
+        params: {
+          lat: location.lat,
+          lon: location.lon,
+          radius: 25000,
+          status: "active",
+        },
+      });
       if (resp.data.status === "success") {
         const allReports = resp.data.reports || [];
-        const cityReports = allReports.filter(
-          (r) => r.city === location.city && r.status !== "resolved",
-        );
-
-        const valid = cityReports.filter((r) => {
-          const rTime = new Date(r.timestamp).getTime();
-          return Date.now() - rTime < 4 * 60 * 60 * 1000;
-        });
-        setReports(valid);
+        setReports(allReports);
       }
     } catch (err) {
       console.warn("Failed to fetch community reports:", err.message);
-      // Fallback to local storage
-      const saved = JSON.parse(
-        localStorage.getItem(`reports_${location.city}`) || "[]",
-      );
-      const valid = saved.filter((r) => {
-        const rTime =
-          typeof r.timestamp === "number"
-            ? r.timestamp
-            : new Date(r.timestamp).getTime();
-        return Date.now() - rTime < 4 * 60 * 60 * 1000;
-      });
-      setReports(valid);
+      setReports([]);
     }
   };
 
@@ -106,47 +105,16 @@ const Community = () => {
     setLoading(true);
     try {
       const resp = await axios.post(`${API_BASE_URL}/api/community/report`, {
-        type: form.type,
-        description: form.description,
+        ...form,
         city: location.city,
-        lat: location.lat,
-        lon: location.lon,
-      });
+      }, { headers: { Authorization: `Bearer ${idToken}` } });
 
-      setForm({ type: "fire", description: "" });
+      setForm({ type: "fire", title: "", description: "", severity: "medium", lat: location.lat, lon: location.lon, address: "" });
       alert(resp.data.message || "Report submitted successfully.");
       fetchReports();
     } catch (err) {
       console.error("Reporting error", err);
-      // Fallback local save
-      const newReport = {
-        id: Date.now().toString(),
-        type: form.type,
-        description: form.description,
-        timestamp: new Date().toISOString(),
-        lat: location.lat,
-        lon: location.lon,
-        notified: false,
-        city: location.city,
-      };
-      const saved = JSON.parse(
-        localStorage.getItem(`reports_${location.city}`) || "[]",
-      );
-      const updated = [newReport, ...saved];
-      localStorage.setItem(`reports_${location.city}`, JSON.stringify(updated));
-
-      const valid = updated.filter((r) => {
-        const rTime =
-          typeof r.timestamp === "number"
-            ? r.timestamp
-            : new Date(r.timestamp).getTime();
-        return Date.now() - rTime < 4 * 60 * 60 * 1000;
-      });
-      setReports(valid);
-      setForm({ type: "fire", description: "" });
-      alert(
-        "Report saved locally. Backend unavailable — authorities will be notified when connection is restored.",
-      );
+      alert(err.response?.data?.message || "Report could not be submitted. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -190,7 +158,7 @@ const Community = () => {
       20,
       70,
     );
-    doc.text(`Time: ${new Date(report.timestamp).toLocaleString()}`, 20, 80);
+    doc.text(`Time: ${new Date(report.createdAt || report.timestamp).toLocaleString()}`, 20, 80);
 
     doc.setFontSize(12);
     doc.text("Description:", 20, 95);
@@ -437,19 +405,31 @@ const Community = () => {
         <div className="community-card-heading">
           <div>
             <h2><AlertTriangle size={19} /> Report an Issue</h2>
-            <p className="text-muted">Help people in {location.city} understand local pollution.</p>
+            <p className="text-muted">Help people in {location.city} understand local road and environmental issues.</p>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="community-form-fields">
           <label>
             Issue type
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="road_blockage">Road blockage</option>
+              <option value="accident">Accident</option>
+              <option value="road_damage">Road damage</option>
+              <option value="construction">Construction</option>
+              <option value="waterlogging">Waterlogging</option>
+              <option value="traffic_obstruction">Traffic obstruction</option>
+              <option value="fallen_tree">Fallen tree</option>
+              <option value="garbage">Garbage</option>
               <option value="fire">Fire / burning</option>
               <option value="dust">Heavy dust</option>
               <option value="smoke">Industrial smoke</option>
               <option value="smell">Unusual smell</option>
-              <option value="other">Other pollution</option>
+              <option value="other">Other</option>
             </select>
+          </label>
+          <label>
+            Title
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Short issue title (optional)" />
           </label>
           <label>
             Details <span>(optional)</span>
@@ -458,6 +438,22 @@ const Community = () => {
               placeholder="What did you notice and where?"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </label>
+          <label>
+            Severity
+            <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </label>
+          <label>
+            Location
+            <IssueLocationPicker
+              value={{ lat: form.lat, lon: form.lon, address: form.address }}
+              onChange={(point) => setForm({ ...form, ...point })}
             />
           </label>
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -528,7 +524,7 @@ const Community = () => {
                     marginLeft: "auto",
                   }}
                 >
-                  {new Date(r.timestamp).toLocaleTimeString()}
+                  {new Date(r.createdAt || r.timestamp).toLocaleTimeString()}
                 </span>
               </div>
               <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>

@@ -71,6 +71,13 @@ const endIcon = L.divIcon({
   popupAnchor: [0, -24],
 });
 
+const communityIssueIcon = L.divIcon({
+  className: "community-issue-marker",
+  html: '<div style="background:#f97316;color:#fff;width:28px;height:28px;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.45)">!</div>',
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
+});
+
 // ── FIXED: colored fill + white border + white AQI text ──
 const createAqiIcon = (aqi) => {
   const size = aqi > 200 ? 38 : aqi > 150 ? 32 : aqi > 100 ? 26 : 22;
@@ -326,6 +333,7 @@ const MapWidget = ({
 
   
   const [pins, setPins] = useState([]);
+  const [communityIssues, setCommunityIssues] = useState([]);
   const [ecoDrives, setEcoDrives] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -366,6 +374,32 @@ const MapWidget = ({
     const interval = setInterval(fetchPins, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [lat, lon, city, viewport]);
+
+  useEffect(() => {
+    const fetchIssues = async () => {
+      try {
+        // Use the map position rather than the dashboard city label so reports
+        // saved with a manual/reverse-geocoded city are still visible.
+        const params = {};
+        if (viewport) {
+          params.lat = viewport.lat;
+          params.lon = viewport.lon;
+          params.radius = 25000;
+        } else {
+          params.lat = lat;
+          params.lon = lon;
+          params.radius = 25000;
+        }
+        const res = await axios.get(`${API_BASE_URL}/api/community/reports`, { params });
+        setCommunityIssues(res.data.reports || []);
+      } catch (err) {
+        console.error("Failed to load community issues", err);
+      }
+    };
+    if (city) fetchIssues();
+    const interval = setInterval(fetchIssues, 60000);
+    return () => clearInterval(interval);
+  }, [city, lat, lon, viewport]);
 
   if (!centerLat || !centerLon) {
     return (
@@ -526,6 +560,33 @@ const MapWidget = ({
             </Popup>
           </Marker>
         )}
+
+        {[...communityIssues, ...(route?.communityIssues || [])]
+          .filter((issue, index, all) => all.findIndex((item) => item.id === issue.id) === index)
+          .map((issue) => (
+            <Marker key={`issue-${issue.id}`} position={[issue.lat, issue.lon]} icon={communityIssueIcon}>
+              <Popup>
+                <div style={{ color: "#111", minWidth: 220, lineHeight: 1.45 }}>
+                  <strong style={{ textTransform: "capitalize" }}>
+                    {issue.title || issue.type?.replaceAll("_", " ") || "Community issue"}
+                  </strong>
+                  <div style={{ marginTop: 4 }}>
+                    {issue.description || "No description provided."}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: "0.8rem" }}>
+                    <strong>Type:</strong> {issue.type?.replaceAll("_", " ") || "Other"}<br />
+                    <strong>Severity:</strong> {issue.severity || "medium"}<br />
+                    <strong>Status:</strong> {issue.status || "active"}<br />
+                    <strong>Reported:</strong>{" "}
+                    {issue.createdAt ? new Date(issue.createdAt).toLocaleString() : "Unknown"}<br />
+                    <strong>Reported by:</strong> {issue.reportedBy?.name || "Community member"}<br />
+                    {issue.address && <><strong>Address:</strong> {issue.address}<br /></>}
+                    <strong>Confirmations:</strong> YES {issue.yesCount || 0} · NO {issue.noCount || 0}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
         {!showHeatmap ? (
           <MarkerClusterGroup

@@ -4,6 +4,7 @@ import { useLocation } from "../hooks/useLocation";
 import { useAuth } from "../context/AuthContext";
 import MapWidget from "../components/MapWidget";
 import { API_BASE_URL } from "../apiConfig";
+import { useAuth } from "../context/AuthContext";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -52,7 +53,7 @@ const Routing = () => {
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const isNavigating = false; // Kept as constant for MapWidget compat
   const [userPos, setUserPos] = useState(null);
-  const [travelMode, setTravelMode] = useState("driving");
+  const travelMode = "driving";
   const hasCalculated = useRef(false);
 
   // Close on Escape key
@@ -271,6 +272,25 @@ const Routing = () => {
   const useMyLocation = () => {
     if (userPos) setStart("My Location");
     else alert("GPS not yet available. Please allow location access.");
+  };
+
+  const nearbyIssue = userPos && selectedRoute?.communityIssues?.find((issue) => {
+    const dLat = (issue.lat - userPos.lat) * 111000;
+    const dLon = (issue.lon - userPos.lon) * 111000 * Math.cos((userPos.lat * Math.PI) / 180);
+    return Math.sqrt(dLat * dLat + dLon * dLon) <= 300;
+  });
+
+  const submitVerification = async (response) => {
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/community/reports/${nearbyIssue.id}/feedback`,
+        { response, lat: userPos.lat, lon: userPos.lon },
+        { headers: { Authorization: `Bearer ${idToken}` } },
+      );
+      setVerificationDismissed(true);
+    } catch (error) {
+      alert(error.response?.data?.message || "Verification could not be submitted.");
+    }
   };
 
   const centerLat = location.lat || userPos?.lat || 20.9343;
@@ -511,7 +531,14 @@ const Routing = () => {
                     <span style={{ color: r.color, fontWeight: "500" }}>{r.via}</span>
                   </div>
                 )}
-                <div style={{ fontSize: "0.72rem", marginTop: "6px", fontStyle: "italic", opacity: 0.8 }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    marginTop: "6px",
+                    fontStyle: "italic",
+                    opacity: 0.8,
+                  }}
+                >
                   {r.safety_reason}
                 </div>
                 
@@ -622,6 +649,58 @@ const Routing = () => {
         )}
 
         </div>
+        {selectedRoute?.routeWarnings?.length > 0 && (
+          <div style={{ padding: 14, borderRadius: 10, background: "rgba(249,115,22,.12)", border: "1px solid rgba(249,115,22,.35)" }}>
+            <strong style={{ color: "#f97316", display: "block", marginBottom: 8 }}>
+              Community-reported issues ahead
+            </strong>
+            {[...new Set(selectedRoute.routeWarnings)].map((warning, index) => (
+              <div
+                key={warning}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  fontSize: "0.8rem",
+                  lineHeight: 1.35,
+                  marginTop: index === 0 ? 0 : 6,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <span
+                  aria-label={`Issue ${index + 1}`}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    flex: "0 0 22px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    background: "#f97316",
+                    color: "#fff",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {nearbyIssue && !verificationDismissed && (
+          <div style={{ padding: 12, borderRadius: 10, background: "var(--bg-tertiary)" }}>
+            <strong>Did you observe this issue?</strong>
+            <div style={{ fontSize: "0.8rem", margin: "4px 0 8px" }}>{nearbyIssue.type.replaceAll("_", " ")}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn-primary" onClick={() => submitVerification("yes")}>YES</button>
+              <button type="button" className="btn-secondary" onClick={() => submitVerification("no")}>NO</button>
+              <button type="button" className="btn-secondary" onClick={() => setVerificationDismissed(true)}>Dismiss</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div
