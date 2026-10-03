@@ -7,9 +7,7 @@ load_dotenv()
 # --- API Keys ---
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 AQICN_API_TOKEN = os.getenv("AQICN_API_TOKEN", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "False").lower() == "true"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Govt India Open Data Portal (Data.gov.in)
