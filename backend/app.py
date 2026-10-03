@@ -77,6 +77,12 @@ except Exception as e:
 # Initialize modules
 forecaster = AQIForecaster()
 router     = RoutePlanner()
+
+from backend.services.cost_calculator import CostCalculatorService
+from backend.services.usage_tracking import UsageTrackingService
+cost_calculator = CostCalculatorService()
+usage_tracker = UsageTrackingService(limit=5)
+
 advisor    = HealthAdvisor()
 simulator  = PolicySimulator()
 
@@ -217,6 +223,7 @@ def calculate_route():
         end_coords = [float(data['end_lon']), float(data['end_lat'])]
         
     mode  = data.get('mode', 'driving')
+    vehicle_type = data.get('vehicle_type', 'petrol_car')
     try:
         lat = float(data.get('lat')) if data.get('lat') else 18.5204
         lon = float(data.get('lon')) if data.get('lon') else 73.8567
@@ -224,12 +231,41 @@ def calculate_route():
         lat, lon = 18.5204, 73.8567
     city = data.get('city', 'Pune')
     
+    # Check auth for usage limits
+    auth_header = request.headers.get('Authorization')
+    user_info = None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split('Bearer ')[1]
+        try:
+            from firebase_admin import auth as fb_auth
+            user_info = fb_auth.verify_id_token(token)
+        except:
+            pass
+            
     if not start_name or not end_name:
         return jsonify({"status": "error", "message": "Start and end locations are required"}), 400
         
     try:
         routes = router.find_routes(start_name, end_name, city, lat, lon, mode, start_coords, end_coords)
-        return jsonify({"status": "success", "routes": routes})
+        
+        # New Feature: Cost Calculation and Usage Tracking
+        advanced_analysis_blocked = False
+        usage_remaining = 0
+        
+        can_proceed, remaining = usage_tracker.check_and_increment_usage(user_info)
+        
+        if can_proceed:
+            routes = cost_calculator.compare_routes(routes, vehicle_type)
+            usage_remaining = remaining
+        else:
+            advanced_analysis_blocked = True
+            
+        return jsonify({
+            "status": "success", 
+            "routes": routes,
+            "advanced_analysis_blocked": advanced_analysis_blocked,
+            "usage_remaining": usage_remaining
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()
