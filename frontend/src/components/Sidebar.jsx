@@ -1,11 +1,16 @@
 import React, { useState } from "react";
-import { NavLink, useLocation as useRouterLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "../hooks/useLocation";
 import { useAuth } from "../context/AuthContext";
 import {
-  CloudRain,
   LayoutDashboard,
+  CloudRain,
   Route,
+  ShieldAlert,
+  Heart,
+  HeartPulse,
+  DivideSquare,
+  Users,
   Search,
   LogOut,
   User,
@@ -13,17 +18,26 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import ThemeToggle from "./ThemeToggle";
-import { NAV_ITEMS } from "../config/navigation";
+
+const NAV_ITEMS = [
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", sub: "Live AQI" },
+  { to: "/dashboard/forecast", icon: CloudRain, label: "Forecast", sub: "72-Hour" },
+  { to: "/dashboard/routing", icon: Route, label: "Routing", sub: "Eco Routes" },
+  { to: "/dashboard/policy", icon: ShieldAlert, label: "Policy", sub: "Simulation" },
+  { to: "/dashboard/safe-zones", icon: Heart, label: "Safe Zones", sub: "Clean Areas" },
+  { to: "/dashboard/health-advisory", icon: HeartPulse, label: "Health Advisory", sub: "Personalized" },
+  { to: "/dashboard/compare", icon: DivideSquare, label: "Compare", sub: "Cities" },
+  { to: "/dashboard/community", icon: Users, label: "Community", sub: "Reports" },
+  { to: "/dashboard/alerts", icon: Bell, label: "Alerts", sub: "Notifications" },
+];
 
 const Sidebar = () => {
   const navigate = useNavigate();
-  const routerLocation = useRouterLocation();
   const { location, setManualLocation, getGPS } = useLocation();
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(null);
 
   const handleSearch = async (e) => {
     const query = e.target.value;
@@ -87,59 +101,8 @@ const Sidebar = () => {
     setShowUserMenu(false);
   };
 
-  const exploreItems = NAV_ITEMS.filter(({ to }) => ["/dashboard/forecast", "/dashboard/policy", "/dashboard/safe-zones", "/dashboard/health-advisory"].includes(to));
-  const moreItems = NAV_ITEMS.filter(({ to }) => ["/dashboard/compare", "/dashboard/community", "/dashboard/alerts"].includes(to));
-  const isRouteActive = (to) => routerLocation.pathname === to || routerLocation.pathname.startsWith(`${to}/`);
-  const isExploreActive = exploreItems.some(({ to }) => isRouteActive(to));
-  const isMoreActive = moreItems.some(({ to }) => isRouteActive(to));
-
-  const renderMobileMenu = (items, title) => (
-    <div className="mobile-nav-sheet" role="dialog" aria-label={title}>
-      <div className="mobile-nav-sheet-header">
-        <strong>{title}</strong>
-        <button type="button" onClick={() => setMobileMenu(null)} aria-label={`Close ${title}`}><span aria-hidden="true">×</span></button>
-      </div>
-      <div className="mobile-nav-sheet-grid">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={`mobile-sheet-link${isRouteActive(item.to) ? " active" : ""}`}
-            onClick={() => setMobileMenu(null)}
-          >
-            {React.createElement(item.icon, { size: 20 })}
-            <span>{item.label}</span>
-            <small>{item.sub}</small>
-          </NavLink>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <>
-      <header className="mobile-app-header">
-        <div className="mobile-app-brand"><span className="sidebar-brand-icon">🌿</span>Eco<span>Stride</span></div>
-        <button
-          type="button"
-          className="mobile-profile-button"
-          onClick={() => setShowUserMenu((value) => !value)}
-          aria-label="Open profile menu"
-          title={user?.name || "Profile"}
-        >
-          <span>{user?.name?.charAt(0)?.toUpperCase() || <User size={18} />}</span>
-        </button>
-        {showUserMenu && (
-          <div className="mobile-profile-menu">
-            <strong>{user?.name || "EcoStride profile"}</strong>
-            {user?.email && <small>{user.email}</small>}
-            <button type="button" onClick={handleProfileSetup}><User size={16} /> Edit Profile</button>
-            <button type="button" onClick={handleOpenNotifications}><Bell size={16} /> Notification Settings</button>
-            <button type="button" onClick={handleLogout}><LogOut size={16} /> Sign Out</button>
-          </div>
-        )}
-      </header>
-
       {/* ── Desktop sidebar ── */}
       <aside className="sidebar">
         {/* Brand */}
@@ -248,45 +211,40 @@ const Sidebar = () => {
 
         {/* Nav */}
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map(({ to, icon: Icon, label, sub }) => (
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
+              key={to}
+              to={to}
+              end={to === "/"}
               className={({ isActive }) =>
                 `nav-item${isActive ? " active" : ""}`
               }
             >
-              {React.createElement(item.icon, { size: 17, className: "nav-item-icon" })}
+              <Icon size={17} className="nav-item-icon" />
               <span className="nav-item-text">
-                <span className="nav-item-label">{item.label}</span>
-                <span className="nav-item-sub">{item.sub}</span>
+                <span className="nav-item-label">{label}</span>
+                <span className="nav-item-sub">{sub}</span>
               </span>
             </NavLink>
           ))}
         </nav>
       </aside>
 
-      {mobileMenu === "explore" && renderMobileMenu(exploreItems, "Explore EcoStride")}
-      {mobileMenu === "more" && renderMobileMenu(moreItems, "More EcoStride tools")}
-
+      {/* ── Mobile bottom nav ── */}
       <nav className="mobile-bottom-nav">
-        <NavLink to="/dashboard" end className={({ isActive }) => `mobile-nav-item${isActive ? " active" : ""}`}>
-          <LayoutDashboard size={19} />
-          <span>Home</span>
-        </NavLink>
-        <button type="button" className={`mobile-nav-item mobile-nav-menu-button${mobileMenu === "explore" || isExploreActive ? " active" : ""}`} onClick={() => setMobileMenu(mobileMenu === "explore" ? null : "explore")}>
-          <CloudRain size={19} />
-          <span>Explore</span>
-        </button>
-        <NavLink to="/dashboard/routing" className={({ isActive }) => `mobile-nav-route${isActive ? " active" : ""}`}>
-          <span className="mobile-nav-route-icon"><Route size={23} /></span>
-          <span>Route</span>
-        </NavLink>
-        <button type="button" className={`mobile-nav-item mobile-nav-menu-button${mobileMenu === "more" || isMoreActive ? " active" : ""}`} onClick={() => setMobileMenu(mobileMenu === "more" ? null : "more")}>
-          <span className="mobile-nav-more-dots" aria-hidden="true">•••</span>
-          <span>More</span>
-        </button>
+        {NAV_ITEMS.slice(0, 5).map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === "/"}
+            className={({ isActive }) =>
+              `mobile-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <Icon size={20} />
+            {label}
+          </NavLink>
+        ))}
       </nav>
     </>
   );

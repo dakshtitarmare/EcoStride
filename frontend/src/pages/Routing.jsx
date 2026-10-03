@@ -547,8 +547,8 @@ const Routing = () => {
       </div>
 
       <style>{`
-        .suggestions-box { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-subtle); z-index: 3000; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: min(280px, 38vh); overflow-y: auto; }
-        .suggestion-item { min-height: 44px; display: flex; align-items: center; padding: 10px 12px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--border-subtle); }
+        .suggestions-box { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-subtle); z-index: 2000; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .suggestion-item { padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--border-subtle); }
         .suggestion-item:hover { background: var(--bg-tertiary); color: var(--accent-cyan); }
         input { background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-size: 0.9rem; }
       `}</style>
