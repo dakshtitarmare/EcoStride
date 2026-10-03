@@ -23,6 +23,11 @@ import CommunityReportsAdmin from './pages/CommunityReportsAdmin';
 import AccountBlocked from './pages/AccountBlocked';
 import AlertSettings from './pages/AlertSettings';
 import HealthAdvisory from './pages/HealthAdvisory';
+import EcoDrives from './pages/EcoDrives';
+import EcoDriveDetails from './pages/EcoDriveDetails';
+import OrganizerDashboard from './pages/OrganizerDashboard';
+import CreateEcoDrive from './pages/CreateEcoDrive';
+
 
 function App() {
   return (
@@ -50,6 +55,13 @@ function App() {
             <Route path="safe-zones" element={<SafeZones />} />
             <Route path="health-advisory" element={<HealthAdvisory />} />
             <Route path="compare" element={<Compare />} />
+            
+            <Route path="eco-drives" element={<EcoDrives />} />
+            <Route path="eco-drives/:id" element={<EcoDriveDetails />} />
+            <Route path="organizer" element={<OrganizerDashboard />} />
+            <Route path="organizer/create" element={<CreateEcoDrive />} />
+            <Route path="organizer/edit/:id" element={<CreateEcoDrive />} />
+
             <Route path="community" element={<Community />} />
             <Route path="alerts" element={<AlertSettings />} />
           </Route>

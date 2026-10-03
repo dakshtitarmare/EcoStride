@@ -101,6 +101,30 @@ const createAqiIcon = (aqi) => {
 };
 
 // Component to center on a point — pans/flies to new coordinates whenever they change
+
+const ecoDriveIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    background: #10b981;
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    cursor: pointer;
+  ">
+    <span style="transform: rotate(45deg); font-size: 14px;">🌿</span>
+  </div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
+});
+
 const MapController = ({ center, route }) => {
   const map = useMap();
   const lastCenter = useRef(null);
@@ -300,7 +324,10 @@ const MapWidget = ({
   const centerLat = isNavigating && userPos ? userPos.lat : lat;
   const centerLon = isNavigating && userPos ? userPos.lon : lon;
 
+  
   const [pins, setPins] = useState([]);
+  const [ecoDrives, setEcoDrives] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [viewport, setViewport] = useState(null);
 
@@ -321,6 +348,13 @@ const MapWidget = ({
           `${API_BASE_URL}/api/map/pins?lat=${requestLat}&lon=${requestLon}&city=${encodeURIComponent(city)}${boundsQuery}`,
         );
         setPins(res.data.pins || []);
+
+        try {
+          const res2 = await axios.get(`${API_BASE_URL}/api/events?status=upcoming&city=${encodeURIComponent(city)}`);
+          setEcoDrives(res2.data.events || []);
+        } catch(e) {
+          console.error('Failed to load eco drives:', e);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -538,6 +572,33 @@ const MapWidget = ({
                     </div>
                   </div>
                 </Popup>
+              </Marker>
+            ))}
+
+            {ecoDrives.map(drive => (
+              <Marker 
+                 key={drive.id}
+                 position={[drive.location.lat, drive.location.lon]}
+                 icon={ecoDriveIcon}
+              >
+                 <Popup>
+                    <div style={{ color: '#111' }}>
+                       <h4 style={{ margin: '0 0 4px 0' }}>{drive.title}</h4>
+                       <div style={{ background: '#34A853', padding: '4px 8px', borderRadius: '12px', color: '#fff', display: 'inline-block', marginBottom: 8, fontSize: 12, fontWeight: 'bold' }}>
+                          🌿 {drive.type}
+                       </div>
+                       <div style={{ fontSize: 13 }}>📅 {drive.date}</div>
+                       <div style={{ fontSize: 13 }}>⏰ {drive.startTime} - {drive.endTime}</div>
+                       <div style={{ fontSize: 13, marginBottom: 8 }}>📍 {drive.location.name || drive.location.address}</div>
+                       <button 
+                         className="btn btn-primary" 
+                         style={{ padding: '6px 12px', width: '100%', fontSize: 13, borderRadius: 8 }}
+                         onClick={() => window.location.href = `/dashboard/eco-drives/${drive.id}`}
+                       >
+                         View Drive
+                       </button>
+                    </div>
+                 </Popup>
               </Marker>
             ))}
           </MarkerClusterGroup>

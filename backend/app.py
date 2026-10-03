@@ -80,6 +80,51 @@ router     = RoutePlanner()
 advisor    = HealthAdvisor()
 simulator  = PolicySimulator()
 
+ECO_DRIVES = [
+    {
+        "id": 1,
+        "title": "Pune River Cleanup Sprint",
+        "category": "Cleanup",
+        "description": "Collect and segregate waste from riverbanks and public trails to keep the city cleaner and reduce pollution.",
+        "city": "Pune",
+        "location": "Pune, Maharashtra",
+        "date": "2026-04-12",
+        "time": "7:00 AM - 10:00 AM",
+        "volunteers": 42,
+        "max_volunteers": 60,
+        "status": "Open",
+        "organizer": "EcoStride Team",
+    },
+    {
+        "id": 2,
+        "title": "Green Campus Revival",
+        "category": "Tree Planting",
+        "description": "Plant native trees and restore green cover across campus and neighborhood spaces.",
+        "city": "Pune",
+        "location": "Viman Nagar",
+        "date": "2026-04-18",
+        "time": "8:30 AM - 12:30 PM",
+        "volunteers": 28,
+        "max_volunteers": 50,
+        "status": "Open",
+        "organizer": "Urban Greens",
+    },
+    {
+        "id": 3,
+        "title": "Plastic-Free Market Walk",
+        "category": "Awareness",
+        "description": "Run a neighborhood awareness walk to promote refuse-free alternatives and better disposal habits.",
+        "city": "Pune",
+        "location": "FC Road",
+        "date": "2026-04-24",
+        "time": "6:30 PM - 8:00 PM",
+        "volunteers": 17,
+        "max_volunteers": 30,
+        "status": "Limited",
+        "organizer": "Community Action Group",
+    },
+]
+
 # Start periodic AQI notification checks after application services initialize.
 start_background_tasks()
 
@@ -1416,7 +1461,150 @@ def admin_login():
         }), 500
 
 
+# --- Eco Drives APIs ---
+from backend.services.eco_drives import EcoDrivesService
+
+eco_drives_service = EcoDrivesService()
+
+def require_auth(f):
+    from functools import wraps
+    from flask import request, jsonify
+    from backend.auth import verify_google_token
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'status': 'error', 'message': 'No valid authorization token'}), 401
+            
+        id_token = auth_header[7:]
+        user_info = verify_google_token(id_token)
+        if not user_info:
+            return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+            
+        return f(user_info, *args, **kwargs)
+    return decorated_function
+
+def require_organizer(f):
+    from functools import wraps
+    from flask import request, jsonify
+    
+    @wraps(f)
+    @require_auth
+    def decorated_function(user_info, *args, **kwargs):
+        organizer = eco_drives_service.get_organizer(user_info['uid'])
+        if not organizer or organizer.get('status') != 'approved':
+            return jsonify({'status': 'error', 'message': 'Unauthorized organizer'}), 403
+            
+        return f(organizer, *args, **kwargs)
+    return decorated_function
+
+
+# Public Event APIs
+@app.route('/api/events', methods=['GET'])
+def get_events():
+    status_filter = request.args.get('status')
+    city = request.args.get('city')
+    event_type = request.args.get('type')
+    
+    success, result = eco_drives_service.get_all_events(status_filter, city, event_type)
+    if success:
+        return jsonify({'status': 'success', 'events': result})
+    return jsonify({'status': 'error', 'message': result}), 500
+
+@app.route('/api/events/<event_id>', methods=['GET'])
+def get_event_details(event_id):
+    success, result = eco_drives_service.get_event(event_id)
+    if success:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': result}), 404
+
+@app.route('/api/events/<event_id>/join', methods=['POST'])
+@require_auth
+def request_to_join(user_info, event_id):
+    success, result = eco_drives_service.request_to_join(event_id, user_info)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/events/<event_id>/join-status', methods=['GET'])
+@require_auth
+def get_join_status(user_info, event_id):
+    success, result = eco_drives_service.get_join_status(event_id, user_info['uid'])
+    if success:
+        return jsonify({'status': 'success', **result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/events/<event_id>/join', methods=['DELETE'])
+@require_auth
+def cancel_join_request(user_info, event_id):
+    success, result = eco_drives_service.cancel_join_request(event_id, user_info['uid'])
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+# Organizer APIs
+@app.route('/api/organizer/apply', methods=['POST'])
+@require_auth
+def apply_organizer(user_info):
+    data = request.json or {}
+    success, result = eco_drives_service.apply_organizer(user_info, data)
+    if success:
+        return jsonify({'status': 'success', 'organizer': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events', methods=['POST'])
+@require_organizer
+def create_org_event(organizer):
+    data = request.json or {}
+    success, result = eco_drives_service.create_event(organizer, data)
+    if success:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events', methods=['GET'])
+@require_organizer
+def get_org_events(organizer):
+    success, result = eco_drives_service.get_organizer_events(organizer['uid'])
+    if success:
+        return jsonify({'status': 'success', 'events': result})
+    return jsonify({'status': 'error', 'message': result}), 500
+
+@app.route('/api/organizer/events/<event_id>', methods=['GET'])
+@require_organizer
+def get_org_event(organizer, event_id):
+    success, result = eco_drives_service.get_event(event_id)
+    if success and result.get('organizerId') == organizer['uid']:
+        return jsonify({'status': 'success', 'event': result})
+    return jsonify({'status': 'error', 'message': 'Not found or unauthorized'}), 404
+
+@app.route('/api/organizer/events/<event_id>', methods=['PUT'])
+@require_organizer
+def update_org_event(organizer, event_id):
+    data = request.json or {}
+    success, result = eco_drives_service.update_event(organizer['uid'], event_id, data)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events/<event_id>/cancel', methods=['POST'])
+@require_organizer
+def cancel_org_event(organizer, event_id):
+    success, result = eco_drives_service.cancel_event(organizer['uid'], event_id)
+    if success:
+        return jsonify({'status': 'success', 'message': result})
+    return jsonify({'status': 'error', 'message': result}), 400
+
+@app.route('/api/organizer/events/<event_id>/participants', methods=['GET'])
+@require_organizer
+def get_org_event_participants(organizer, event_id):
+    success, result = eco_drives_service.get_event_participants(organizer['uid'], event_id)
+    if success:
+        return jsonify({'status': 'success', 'participants': result})
+    return jsonify({'status': 'error', 'message': result}), 400
 if __name__ == '__main__':
     from config import PORT, HOST, DEBUG
     print(f"Starting Team-X project on http://{HOST}:{PORT}")
     app.run(debug=DEBUG, host=HOST, port=PORT, threaded=True)
+
+
