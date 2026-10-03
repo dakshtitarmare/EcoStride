@@ -15,7 +15,7 @@ def initialize_firebase():
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
-    from config import FIREBASE_DATABASE_URL, FIREBASE_CREDENTIALS
+    from backend.temp_config import FIREBASE_DATABASE_URL, FIREBASE_CREDENTIALS
     import glob
     
     base_dir = os.path.dirname(os.path.abspath(__file__))

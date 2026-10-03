@@ -4,12 +4,12 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 try:
-    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
+    from backend.temp_config import GROQ_API_KEY, GEMINI_API_KEY, USE_LOCAL_LLM, DATABASE_PATH
 
 class HealthAdvisor:
     def __init__(self):
@@ -111,6 +111,13 @@ User question: {question}
 
     def answer_chat_question(self, question, context):
         """Answer a user question using the current application data."""
+        location_name = context.get("location_name")
+        if location_name and any(word in question.lower() for word in ("aqi", "air quality", "pollution")):
+            aqi = context.get("aqi")
+            category = context.get("category") or "the reported level"
+            if aqi is not None:
+                return f"The current AQI for {location_name} is {aqi} ({category})."
+
         prompt = f"""
 You are EcoStride's in-app assistant. Answer the user's question using the live application data below.
 Be concise, practical, and honest. Do not invent measurements or claim to have performed actions.
@@ -140,9 +147,15 @@ User question: {question}
         """Answer common EcoStride questions without an external model."""
         question_lower = question.lower()
         city = context.get("city", "your area")
+        location_name = context.get("location_name", city)
         aqi = context.get("aqi")
         category = context.get("category") or "the reported level"
         pollutants = context.get("pollutants", {})
+
+        if location_name != city and any(word in question_lower for word in ("aqi", "air quality", "pollution")):
+            if aqi is None:
+                return f"I cannot see a current AQI reading for {location_name} right now."
+            return f"The current AQI for {location_name} is {aqi} ({category})."
 
         if any(word in question_lower for word in ("pollut", "pm2", "pm10", "no2", "ozone", "o3")):
             available = ", ".join(

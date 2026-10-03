@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Send, X } from "lucide-react";
 import axios from "axios";
 import { useLocation } from "../hooks/useLocation";
@@ -17,23 +17,49 @@ const EcoChatbot = () => {
   const [position, setPosition] = useState(DEFAULT_POSITION);
   const dragRef = useRef(null);
 
+  const getPositionBounds = useCallback(() => {
+    const mobile = window.innerWidth <= 768;
+    const bottomInset = mobile ? 86 : 18;
+    return {
+      maxLeft: Math.max(12, window.innerWidth - 76),
+      maxTop: Math.max(12, window.innerHeight - 64 - bottomInset),
+      bottomInset,
+    };
+  }, []);
+
+  const clampPosition = useCallback((next) => {
+    const { maxLeft, maxTop } = getPositionBounds();
+    return {
+      left: Math.max(12, Math.min(maxLeft, next.left)),
+      top: Math.max(12, Math.min(maxTop, next.top)),
+    };
+  }, [getPositionBounds]);
+
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("ecostride_chatbot_position"));
-      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) setPosition(saved);
+      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) setPosition(clampPosition(saved));
     } catch {
       // Ignore invalid saved position.
     }
-  }, []);
+
+    const keepInViewport = () => {
+      setPosition((current) => current.left === null ? current : clampPosition(current));
+    };
+    window.addEventListener("resize", keepInViewport);
+    return () => window.removeEventListener("resize", keepInViewport);
+  }, [clampPosition]);
 
   const getPosition = () => {
     if (position.left !== null) return position;
-    return { left: window.innerWidth - 82, top: window.innerHeight - 82 };
+    const { maxLeft, maxTop } = getPositionBounds();
+    return { left: maxLeft, top: maxTop };
   };
 
   const savePosition = (next) => {
-    setPosition(next);
-    localStorage.setItem("ecostride_chatbot_position", JSON.stringify(next));
+    const safePosition = clampPosition(next);
+    setPosition(safePosition);
+    localStorage.setItem("ecostride_chatbot_position", JSON.stringify(safePosition));
   };
 
   const handlePointerDown = (event) => {
@@ -45,17 +71,19 @@ const EcoChatbot = () => {
 
   const handlePointerMove = (event) => {
     if (!dragRef.current) return;
-    const next = {
-      left: Math.max(12, Math.min(window.innerWidth - 72, dragRef.current.left + event.clientX - dragRef.current.x)),
-      top: Math.max(12, Math.min(window.innerHeight - 72, dragRef.current.top + event.clientY - dragRef.current.y)),
-    };
+    const next = clampPosition({
+      left: dragRef.current.left + event.clientX - dragRef.current.x,
+      top: dragRef.current.top + event.clientY - dragRef.current.y,
+    });
+    dragRef.current.position = next;
     setPosition(next);
   };
 
   const handlePointerUp = () => {
     if (!dragRef.current) return;
+    const next = dragRef.current.position || getPosition();
     dragRef.current = null;
-    savePosition(getPosition());
+    savePosition(next);
   };
 
   const sendMessage = async (event) => {

@@ -3,11 +3,13 @@ import requests
 import random
 try:
     from backend.models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON, haversine
+    from backend.models.pune_locations import find_pune_locations
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     from backend.models.forecasting import AQIForecaster, DEFAULT_LAT, DEFAULT_LON
+    from backend.models.pune_locations import find_pune_locations
 
 # ─────────────────────────────────────────────────────────────────
 # AQI-ZONE WAYPOINTS (Now handled dynamically)
@@ -104,6 +106,13 @@ class RoutePlanner:
         if coords: return coords
         
         return fallback
+
+    def _curated_coords(self, name):
+        matches = find_pune_locations(name)
+        if not matches:
+            return None
+        location = matches[0]
+        return [float(location["lon"]), float(location["lat"])]
 
     def _geocode_biased(self, name, city, user_lat, user_lon):
         """Geocode any place name with escalating search strategies.
@@ -323,7 +332,7 @@ class RoutePlanner:
             start = [lon, lat]
         else:
             # Geocode with viewbox bias around the user's GPS for local results
-            start = self._geocode_biased(start_name, city, lat, lon)
+            start = self._curated_coords(start_name) or self._geocode_biased(start_name, city, lat, lon)
 
         # ── Resolve end coordinates ────────────────────────────────────────
         if end_coords:
@@ -331,7 +340,7 @@ class RoutePlanner:
         elif end_name == "My Location":
             end = [lon, lat]
         else:
-            end = self._geocode_biased(end_name, city, lat, lon)
+            end = self._curated_coords(end_name) or self._geocode_biased(end_name, city, lat, lon)
 
         # Guard: if start == end (geocoding returned same point), return empty
         if abs(start[0] - end[0]) < 0.0005 and abs(start[1] - end[1]) < 0.0005:

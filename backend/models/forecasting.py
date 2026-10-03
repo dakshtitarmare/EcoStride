@@ -5,6 +5,7 @@ import math
 import requests
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from backend.models.pune_locations import PUNE_LOCALITIES
 
 # Default locations (Delhi fallback)
 DEFAULT_COLONIES = [
@@ -64,7 +65,7 @@ DEFAULT_COLONIES = [
     {"name": "MIDC Industrial Area", "lat": 20.9100, "lon": 77.7950},
 ]
 try:
-    from config import (
+    from backend.temp_config import (
         OPENWEATHER_API_KEY, AQICN_API_TOKEN, DATABASE_PATH,
         GOV_INDIA_API_KEY, GOV_INDIA_RESOURCE_ID
     )
@@ -72,7 +73,7 @@ except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import (
+    from backend.temp_config import (
         OPENWEATHER_API_KEY, AQICN_API_TOKEN, DATABASE_PATH,
         GOV_INDIA_API_KEY, GOV_INDIA_RESOURCE_ID
     )
@@ -507,6 +508,7 @@ class AQIForecaster:
                     "lat": float(place_lat),
                     "lon": float(place_lon),
                     "category": category,
+                    "location_type": "osm_locality",
                     "factor": 1.0,
                     "pm_extra": 0,
                     "no2_extra": 0,
@@ -573,9 +575,27 @@ class AQIForecaster:
                 {"name": "Pimpri", "lat": 18.6298, "lon": 73.7997, "category": "Urban Suburb", "factor": 1.18, "pm_extra": 9, "no2_extra": 6},
                 {"name": "Chinchwad", "lat": 18.6279, "lon": 73.7813, "category": "Urban Suburb", "factor": 1.16, "pm_extra": 8, "no2_extra": 6}
             ]
+            # The shared curated dataset is used by both mapping and routing.
+            pune_actual = [dict(item) for item in PUNE_LOCALITIES]
             discovered = self._discover_osm_places(bounds)
             known_names = {item['name'].lower() for item in pune_actual}
-            pune_actual.extend(item for item in discovered if item['name'].lower() not in known_names)
+            known_coordinates = {
+                (round(float(item['lat']), 5), round(float(item['lon']), 5))
+                for item in pune_actual
+            }
+            for item in discovered:
+                coordinate_key = (round(float(item['lat']), 5), round(float(item['lon']), 5))
+                if item['name'].lower() in known_names or coordinate_key in known_coordinates:
+                    continue
+                pune_actual.append(item)
+                known_names.add(item['name'].lower())
+                known_coordinates.add(coordinate_key)
+            if bounds:
+                pune_actual = [
+                    item for item in pune_actual
+                    if bounds['south'] <= float(item['lat']) <= bounds['north']
+                    and bounds['west'] <= float(item['lon']) <= bounds['east']
+                ]
             self._cache[cache_key] = pune_actual
             self._cache_time[cache_key] = datetime.datetime.now()
             return pune_actual
@@ -694,6 +714,14 @@ class AQIForecaster:
             name = str(colony["name"])
             c_lat = float(colony.get("lat", lat))
             c_lon = float(colony.get("lon", lon))
+            location_type = colony.get("location_type", "modeled_locality")
+            pin_source_type = (
+                "official_measurement"
+                if colony.get("official_aqi")
+                else "osm_locality"
+                if location_type == "osm_locality"
+                else "modeled_locality"
+            )
 
             # If this is an official CAAQMS station with a real government measured AQI, use it directly!
             if colony.get("official_aqi") and colony["official_aqi"] > 0:
@@ -715,7 +743,7 @@ class AQIForecaster:
                 pm25_val = max(1.0, float(f"{base_pm25 * cfg_factor + cfg_pm_extra:.1f}"))
                 pm10_val = max(2.0, float(f"{base_pm10 * cfg_factor + cfg_pm_extra:.1f}"))
                 no2_val  = max(1.0, float(f"{base_no2  * cfg_factor + cfg_no2_extra:.1f}"))
-                source_tag = "open_meteo_live+osm_actual_suburb"
+                source_tag = f"open_meteo_live+{pin_source_type}"
 
             pins.append({
                 "id":       idx,
@@ -729,7 +757,9 @@ class AQIForecaster:
                 "o3":       float(f"{base_o3 * max(0.7, colony.get('factor', 1.0) - 0.1):.1f}"),
                 "source":   source_tag,
                 "category": colony.get("category", "Actual Suburb"),
-                "source_type": colony.get("category", "Actual Suburb"),
+                "source_type": pin_source_type,
+                "location_type": "official_station" if colony.get("official_aqi") else location_type,
+                "official_aqi": colony.get("official_aqi"),
             })
 
         pins.sort(key=lambda x: x["aqi"])

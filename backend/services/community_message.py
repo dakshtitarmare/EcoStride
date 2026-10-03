@@ -20,7 +20,7 @@ class CommunityMessageService:
         self.local_storage_path = None
         
         if self.use_local_fallback:
-            from config import LOCAL_STORAGE_PATH
+            from backend.temp_config import LOCAL_STORAGE_PATH
             self.local_storage_path = LOCAL_STORAGE_PATH
             Path(self.local_storage_path).mkdir(parents=True, exist_ok=True)
     

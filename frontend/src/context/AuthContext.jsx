@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../apiConfig';
-import { getUserByUid } from '../utils/firebase';
 
 const AUTH_REQUEST_TIMEOUT = 10000;
 
@@ -73,29 +72,10 @@ export const AuthProvider = ({ children }) => {
     }
   }, [idToken]);
 
-  const signInWithGoogle = async (googleIdToken, firebaseUser) => {
+  const signInWithGoogle = async (googleIdToken) => {
     try {
       setError(null);
       setLoading(true);
-
-      // Check blocked status from Realtime Database using Firebase UID
-      let blocked = false;
-      if (firebaseUser?.uid) {
-        const dbUser = await getUserByUid(firebaseUser.uid);
-        if (dbUser && dbUser.status === 'blocked') {
-          blocked = true;
-        }
-      }
-
-      if (blocked) {
-        setIsBlocked(true);
-        // Do not proceed with backend sign-in for blocked users
-        return {
-          success: false,
-          blocked: true,
-          error: 'Your account has been blocked. Please contact the administrator. Contact with Admin (ecoadmin@gmail.com)'
-        };
-      }
 
       // Send token to backend for verification for non-blocked users
       const response = await axios.post(`${API_BASE_URL}/api/auth/signin`, {

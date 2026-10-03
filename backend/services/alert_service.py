@@ -7,7 +7,7 @@ import requests
 import os
 
 try:
-    from config import SMTP_EMAIL, SMTP_APP_PASSWORD, FAST2SMS_API_KEY, AUTHORITY_EMAIL
+    from backend.temp_config import SMTP_EMAIL, SMTP_APP_PASSWORD, FAST2SMS_API_KEY, AUTHORITY_EMAIL
 except ImportError:
     SMTP_EMAIL = ""
     SMTP_APP_PASSWORD = ""
